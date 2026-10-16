@@ -30,6 +30,8 @@ def client():
     assert (
         c.post("/api/v1/series", json=body("short", count_series(2)), headers=H).status_code == 201
     )
+    tiny = count_series(8).iloc[:6]
+    assert c.post("/api/v1/series", json=body("tiny", tiny), headers=H).status_code == 201
     gappy = count_series(8)
     gappy.loc[::8, "y"] = float("nan")
     assert c.post("/api/v1/series", json=body("gappy", gappy), headers=H).status_code == 201
@@ -112,7 +114,7 @@ def test_series_meta_accepts_gate_overrides_and_rejects_bad_ones(client):
 def test_alerts_scan_returns_gate_and_confidence(client):
     j = client.get("/api/v1/series/good/alerts?method=farrington").json()
     assert j["status"] in ("ok", "degraded") and "gate" in j
-    s = client.get("/api/v1/series/short/alerts?method=ears_c2").json()
+    s = client.get("/api/v1/series/tiny/alerts?method=ears_c2").json()
     assert s["status"] == "refused" and s["latest_is_signal"] is False
     assert client.get("/api/v1/series/good/alerts?method=bogus").status_code == 422
 

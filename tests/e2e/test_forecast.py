@@ -29,11 +29,13 @@ def test_forecast_demo_series_shape(api):
     r = api.get("/api/v1/series/us_ilinet_wili/forecast", params={"horizon": 4})
     assert r.status_code == 200
     j = r.json()
+    # 0.3 added "gate" (additive); every pre-0.3 key is still present
     assert set(j) == {
         "series",
         "data_through",
         "quality",
         "policy",
+        "gate",
         "backtest",
         "forecast",
         "schema_version",

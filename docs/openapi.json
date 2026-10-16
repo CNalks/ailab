@@ -21,7 +21,8 @@
               "ears_c1",
               "ears_c2",
               "ears_c3",
-              "cusum"
+              "cusum",
+              "farrington"
             ],
             "title": "Method",
             "type": "string"
@@ -322,6 +323,11 @@
             "title": "Frequency",
             "type": "string"
           },
+          "gate": {
+            "additionalProperties": true,
+            "title": "Gate",
+            "type": "object"
+          },
           "geography": {
             "default": "",
             "title": "Geography",
@@ -354,6 +360,17 @@
               }
             ],
             "title": "Lineage"
+          },
+          "mask_periods": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "maxItems": 20,
+            "title": "Mask Periods",
+            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -1676,7 +1693,8 @@
                 "ears_c1",
                 "ears_c2",
                 "ears_c3",
-                "cusum"
+                "cusum",
+                "farrington"
               ],
               "title": "Method",
               "type": "string"
@@ -2037,7 +2055,7 @@
     },
     "/api/v1/series/{series_id}/forecast": {
       "get": {
-        "description": "``policy.forecast_allowed=false`` => no forecast values, only the reason.",
+        "description": "Always HTTP 200 for a valid series: a refusal is a normal outcome, not an error.\n`policy.forecast_allowed=false` => `forecast` is null and `gate.reasons` say why\n(`gate.decision` is `refused`; `limited` means a forecast with `gate.limits` applied).",
         "operationId": "forecast_api_v1_series__series_id__forecast_get",
         "parameters": [
           {
@@ -2063,6 +2081,25 @@
               "minimum": 1,
               "title": "Horizon",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Reference date (YYYY-MM-DD) for the gate's stale-data check; by default staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reference date (YYYY-MM-DD) for the gate's stale-data check; by default staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+              "title": "As Of"
             }
           }
         ],
@@ -2141,6 +2178,136 @@
           }
         },
         "summary": "Backtest + policy + forecast",
+        "tags": [
+          "forecast"
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/gate": {
+      "get": {
+        "description": "Reason codes, severities, en/zh/fr messages, measured metrics, thresholds used and\nthe recommended action. Includes the backtest-based checks (`stage: data+backtest`).",
+        "operationId": "series_gate_api_v1_series__series_id__gate_get",
+        "parameters": [
+          {
+            "description": "Series id",
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "description": "Series id",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9_]{0,63}$",
+              "title": "Series Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "maximum": 26,
+              "minimum": 1,
+              "title": "Horizon",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Reference date (YYYY-MM-DD) for the gate's stale-data check; by default staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reference date (YYYY-MM-DD) for the gate's stale-data check; by default staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Series Gate Api V1 Series  Series Id  Gate Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Missing/invalid X-API-Key"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Service is read-only"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unknown series/rule"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Request body too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation error"
+          }
+        },
+        "summary": "Forecast quality gate (allowed / limited / refused) with reasons and metrics",
         "tags": [
           "forecast"
         ]
@@ -2429,6 +2596,25 @@
               "title": "Horizon",
               "type": "integer"
             }
+          },
+          {
+            "description": "Reference date (YYYY-MM-DD) for the gate's stale-data check; by default staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reference date (YYYY-MM-DD) for the gate's stale-data check; by default staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+              "title": "As Of"
+            }
           }
         ],
         "responses": {
@@ -2505,7 +2691,7 @@
             "description": "Validation error"
           }
         },
-        "summary": "Forecast policy only",
+        "summary": "Forecast policy + gate",
         "tags": [
           "forecast"
         ]
@@ -2513,6 +2699,7 @@
     },
     "/api/v1/series/{series_id}/quality": {
       "get": {
+        "description": "Checklist + grade, plus `gate`: the gate's data-level (stage 1) verdict and measured\nmetrics (seasonal strength, ADF/KPSS, level shift, outliers, tail check, ...).",
         "operationId": "series_quality_api_v1_series__series_id__quality_get",
         "parameters": [
           {

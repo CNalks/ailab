@@ -54,6 +54,7 @@ def test_openapi_json_valid_and_complete(api):
         ("GET", "/api/v1/series/{series_id}/export"),
         ("GET", "/api/v1/series/{series_id}/forecast"),
         ("GET", "/api/v1/series/{series_id}/policy"),
+        ("GET", "/api/v1/series/{series_id}/gate"),
         ("GET", "/api/v1/series/{series_id}/alerts"),
         ("POST", "/api/v1/series/{series_id}/recompute"),
         ("POST", "/api/v1/derive"),

@@ -480,7 +480,9 @@ def test_alert_gate_codes():
     good = rng.poisson(50, 120).astype(float)
     g = _alert(good)
     assert g["status"] == "ok" and g["confidence"] in ("medium", "high")
-    assert "alert_baseline_too_short" in g_codes(_alert(good[:20]), "block")
+    assert "alert_baseline_too_short" in g_codes(_alert(good[:9]), "block")
+    short = _alert(good[:20])
+    assert short["status"] == "degraded" and "alert_short_history" in g_codes(short, "warn")
     gappy = good.copy()
     gappy[-9:-2] = np.nan
     assert "alert_baseline_gappy" in g_codes(_alert(gappy), "block")

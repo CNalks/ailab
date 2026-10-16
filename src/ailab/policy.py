@@ -155,7 +155,9 @@ def apply_gate(
     ``trim_weeks``: provisional weeks excluded from fitting; the forecast starts that many weeks
     before ``data_through`` so ``horizon_weeks`` counts only weeks after it.
     """
-    codes = [r.code for r in gate.reasons]
+    codes = [
+        r.code for r in sorted(gate.reasons, key=lambda r: gate_mod.SEVERITY_ORDER[r.severity])
+    ]
     upd = {"gate_decision": gate.decision, "reason_codes": codes, "limited": False}
     if gate.refused:
         blk = gate.first_block

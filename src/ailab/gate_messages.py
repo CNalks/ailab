@@ -195,12 +195,20 @@ REASONS: dict[str, dict[str, str]] = {
     },
     # ---- alert gate --------------------------------------------------------------------
     "alert_baseline_too_short": {
-        "en": "Not enough history to evaluate this alert: {n_periods} periods, need at least "
-        "{needed} (baseline {baseline} + guard {guard} + {min_eval} evaluable periods).",
-        "zh": "历史不足，无法评估该预警：{n_periods} 期，至少需要 {needed} 期"
-        "（基线 {baseline} + 保护带 {guard} + {min_eval} 个可评估周期）。",
-        "fr": "Historique insuffisant pour cette alerte : {n_periods} périodes, {needed} requises "
-        "(base {baseline} + garde {guard} + {min_eval} périodes évaluables).",
+        "en": "Cannot evaluate this alert: {n_periods} periods, but baseline {baseline} + guard "
+        "{guard} + 1 = {needed} are needed.",
+        "zh": "无法评估该预警：仅 {n_periods} 期，而基线 {baseline} + 保护带 {guard} + 1 = {needed} 期是最低要求。",
+        "fr": "Alerte non évaluable : {n_periods} périodes, alors que base {baseline} + garde "
+        "{guard} + 1 = {needed} sont nécessaires.",
+    },
+    "alert_short_history": {
+        "en": "Short history for this alert: {n_periods} periods (full confidence needs "
+        "{needed}, i.e. {min_eval} evaluable periods beyond the baseline); signals are shown "
+        "with low confidence.",
+        "zh": "该预警的历史偏短：{n_periods} 期（要达到完全置信需 {needed} 期，即基线之外再有 "
+        "{min_eval} 个可评估周期）；信号以低置信度显示。",
+        "fr": "Historique court pour cette alerte : {n_periods} périodes (pleine confiance : "
+        "{needed}, soit {min_eval} périodes évaluables après la base) ; signaux à faible confiance.",
     },
     "alert_baseline_gappy": {
         "en": "The baseline window of the latest period has only {obs} observed of {baseline} weeks "

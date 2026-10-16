@@ -107,7 +107,8 @@ class Thresholds:
     limited_interval_inflation: float = 1.25
     break_interval_inflation: float = 1.5
     # --- alerts ------------------------------------------------------------------------------
-    alert_min_eval_periods: int = 26  # evaluable periods needed beyond baseline + guard
+    alert_min_eval_periods: int = 26  # history beyond baseline + guard for full confidence (warn)
+    alert_min_baseline_obs: int = 5  # observed weeks in the baseline window: fewer => refuse
     alert_min_baseline_nonzero: float = 0.5
     alert_min_baseline_mean: float = 1.0  # mean of the baseline (count/rate kinds)
     alert_min_obs_frac: float = 0.7
@@ -294,6 +295,7 @@ ACTION_FOR = {
     "no_skill_beyond_persistence": "use_limited_forecast",
     "interval_undercoverage": "use_limited_forecast",
     "alert_baseline_too_short": "collect_more_history",
+    "alert_short_history": "collect_more_history",
     "alert_baseline_gappy": "repair_gaps",
     "alert_baseline_low_counts": "monitor_only",
     "alert_baseline_constant": "review_series_definition",
@@ -1283,25 +1285,33 @@ def assess_alert(
                     {"farrington_min_seasons": cfg.farrington_min_seasons},
                 )
             )
-    elif n < needed:
+    elif n < baseline + guard + 1:
         reasons.append(
             Reason(
                 "alert_baseline_too_short",
                 "block",
                 {
                     "n_periods": n,
-                    "needed": needed,
+                    "needed": baseline + guard + 1,
                     "baseline": baseline,
                     "guard": guard,
-                    "min_eval": cfg.alert_min_eval_periods,
                 },
+                {},
+            )
+        )
+    elif n < needed:
+        reasons.append(
+            Reason(
+                "alert_short_history",
+                "warn",
+                {"n_periods": n, "needed": needed, "min_eval": cfg.alert_min_eval_periods},
                 {"alert_min_eval_periods": cfg.alert_min_eval_periods},
             )
         )
     if method != "farrington" and n > baseline + guard:
         w = y[n - guard - baseline : n - guard] if guard else y[n - baseline :]
         ww = w[~np.isnan(w)]
-        need = max(3, int(cfg.alert_min_obs_frac * baseline))
+        need = max(cfg.alert_min_baseline_obs, int(cfg.alert_min_obs_frac * baseline))
         met["baseline_obs"] = int(len(ww))
         if len(ww) < need:
             reasons.append(

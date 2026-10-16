@@ -92,7 +92,14 @@ def test_policy_and_forecast_invariants(api, case, loaded):
         assert p[k] == v, (k, p)
     assert _finite(f)
     pol = api.get(f"/api/v1/series/{s}/policy").json()
+    assert pol.pop("gate") == f["gate"]  # /policy = policy fields + the gate (added in 0.3)
     assert pol == p
+    g = f["gate"]
+    assert g["forecast_allowed"] == p["forecast_allowed"] and p["reason_codes"] == g["reason_codes"]
+    assert g["decision"] == p["gate_decision"] and g["limited"] == p["limited"]
+    assert (g["decision"] == "refused") == (not p["forecast_allowed"])
+    if g["decision"] == "refused":
+        assert g["reasons"] and g["recommended_action"]["code"] != "none"
     if not p["forecast_allowed"]:
         assert f["forecast"] is None and p["model_family"] == "none" and p["horizon_weeks"] == 0
         assert p["display_mode"] in ("monitor_only", "history_only")

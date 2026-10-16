@@ -151,13 +151,19 @@ import httpx
 base, key = os.environ["AILAB_URL"], os.environ["AILAB_API_KEY"]
 body = {
     "meta": {"series_id": "tut_py", "name": "From Python", "indicator_type": "count"},
-    "observations": [{"ds": "2025-01-05", "y": 3}, {"ds": "2025-01-12", "y": None}, {"ds": "2025-01-19", "y": 5}],
+    "observations": [
+        {"ds": "2025-01-05", "y": 3},
+        {"ds": "2025-01-12", "y": None},
+        {"ds": "2025-01-19", "y": 5},
+    ],
 }
 with httpx.Client(base_url=base, timeout=120) as c:
-    r = c.post("/api/v1/series", params={"overwrite": "true"}, json=body, headers={"X-API-Key": key})
+    r = c.post(
+        "/api/v1/series", params={"overwrite": "true"}, json=body, headers={"X-API-Key": key}
+    )
     r.raise_for_status()
     items = c.get("/api/v1/series/tut_py/data").json()["items"]
-    assert [o["y"] for o in items] == [3, None, 5]      # the missing week is None, not 0
+    assert [o["y"] for o in items] == [3, None, 5]  # the missing week is None, not 0
     print([o["y"] for o in items])
     c.delete("/api/v1/series/tut_py", headers={"X-API-Key": key}).raise_for_status()
 ```

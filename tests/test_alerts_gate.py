@@ -52,8 +52,8 @@ def test_farrington_downweights_past_outbreaks_in_the_reference_window():
 
 
 def test_scan_refuses_short_series_with_reasons_and_suppresses_signals():
-    df = seasonal(0, 20)
-    df.loc[18, "y"] = df["y"].iloc[:15].max() * 5
+    df = seasonal(0, 9)
+    df.loc[8, "y"] = df["y"].iloc[:7].max() * 5
     out = alerts.scan(m52(), df, "ears_c2", 7)
     assert out["status"] == "refused" and out["confidence"] == "none"
     assert "alert_baseline_too_short" in out["gate"]["reason_codes"]
