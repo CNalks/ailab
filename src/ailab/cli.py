@@ -408,8 +408,14 @@ def serve(
         level=os.environ.get("AILAB_LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    from .api.settings import ConfigError
+
+    try:
+        application = create_app(db_path=db, preload_demo=preload_demo or None)
+    except ConfigError as exc:  # clean one-line message instead of a rich traceback
+        raise _fail(exc) from None
     uvicorn.run(
-        create_app(db_path=db, preload_demo=preload_demo or None),
+        application,
         host=host,
         port=port,
         log_level="info",

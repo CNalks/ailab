@@ -87,3 +87,16 @@ def test_series_deleted_between_check_and_read_is_404_not_500(monkeypatch):
     monkeypatch.setattr(store, "get_observations", vanish)
     r = c.get("/api/v1/series/gone/data")
     assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+
+
+def test_serve_with_short_key_prints_one_clean_line(monkeypatch, tmp_path):
+    """A bad AILAB_API_KEY used to dump a (line-wrapped) rich traceback."""
+    from typer.testing import CliRunner
+
+    from ailab.cli import app
+
+    monkeypatch.setenv("AILAB_API_KEY", "short")
+    monkeypatch.setenv("AILAB_DB", str(tmp_path / "x.duckdb"))
+    r = CliRunner().invoke(app, ["serve", "--port", "1"])
+    out = r.output + (r.stderr if r.stderr_bytes else "")
+    assert r.exit_code == 2 and "at least 16 characters" in out and "Traceback" not in out
