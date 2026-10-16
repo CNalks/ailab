@@ -1,12 +1,12 @@
-# 测试报告 / Test report — v0.2.1
+# 测试报告 / Test report — v0.3.0
 
 > English summary at the bottom. 本报告由 `make e2e-report`（`scripts/e2e_report.py`）根据 `out/e2e-*.json` 生成的覆盖表加人工说明组成。
-> 运行日期：2026-10-16（Asia/Shanghai）。
+> 运行日期：2026-10-16（v0.3.0 重跑；覆盖明细表与性能表沿用 v0.2.1 的测量，端点/场景无变化，新增 `/gate`）（Asia/Shanghai）。
 
 ## 1. 范围与方法
 
-- **单元/集成测试**：245 个（`make test`，每次 CI 运行）。
-- **黑盒 e2e 测试**：504 个（`tests/e2e/`，`make e2e`），只通过 HTTP 访问真实运行的服务，不导入应用代码。两个目标：
+- **单元/集成测试**：301 个（v0.3 新增质量门控 `test_gate`、`test_alerts_gate`、`test_api_gate`：每个原因码都由构造序列触发、真实 FluView 与合成季节序列不被误拒、配置分层、三语消息、限制模式、API/导出）（`make test`，每次 CI 运行）。
+- **黑盒 e2e 测试**：518 个（含新增 `test_gate.py`）（`tests/e2e/`，`make e2e`），只通过 HTTP 访问真实运行的服务，不导入应用代码。两个目标：
   - `local`：子进程 `python -m ailab.cli serve`；
   - `container`：podman 容器，`--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`，非 root，命名卷。
 - **慢速/性能测试**：5 个（`make e2e-slow`），在两个目标上各跑一次。
@@ -18,14 +18,14 @@
 
 | 目标 | 测试数 | 通过 | 失败 | 跳过 | HTTP 请求数 |
 |---|---|---|---|---|---|
-| local | 504 | 498 | 0 | 6 | 2623 |
-| container | 504 | 503 | 0 | 1 | 2624 |
+| local | 518 | 512 | 0 | 6 | 2669 |
+| container | 518 | 517 | 0 | 1 | 2672 |
 | local slow | 5 | 5 | 0 | 0 | 13 |
 | container slow | 5 | 5 | 0 | 0 | 13 |
 
 跳过的均为目标相关用例：local 跳过 6 个仅容器目标的检查（非 root、只读文件系统、无 capability、healthcheck、镜像内 CLI、重建容器保留卷数据）；container 跳过 1 个仅本地目标的检查（同一数据文件被第二个进程打开时安全失败）。不是失败。
 
-全部 24 个已文档化的操作都有覆盖（见下表；`other` 行是恶意/未知路径与异常方法）。
+全部 25 个已文档化的操作都有覆盖（见下表；`other` 行是恶意/未知路径与异常方法）。
 
 ## 3. 覆盖表（container 目标，完整运行）
 
@@ -79,19 +79,20 @@
 3. **并发创建同一 id 多个 201（非原子）** → `write_lock` 保护 check-then-write（create/delete/derive/recompute）。
 4. **并发 DELETE + GET 偶发 500** → `KeyError` 映射为 404。
 5. **`ailab serve` 配置非法时打印冗长 traceback** → 单行错误信息，退出码 2。
+6. （v0.3 开发中发现，均有测试）原始 ADF/KPSS 会把真实流感序列判为"不平稳" → 改为去季节后只警告；STL 残差 MAD 把流感峰误判为离群点 → Hampel 局部中位数；简单均值突变扫描把平滑趋势判为突变 → 去趋势 HAC 扫描；Farrington 对旧暴发重加权不足（期望值被抬高 47%）→ 稳健离散度重加权；旧原因 `backtest_not_possible` 掩盖了门控的 `stale_data`/`too_short` → 以门控原因为准；`/policy` 与 `forecast.policy` 一致性、原因码顺序一致性。
 
 ## 6. 已知限制与观察（未修改，已在文档中说明）
 
 - 计数/率类序列在回溯季节数不足 3 个时仍允许预测，并附带警告；比例类则会拒绝。是否统一收紧见 `docs/MODEL_POLICY.md`。
 - DuckDB 为单进程单文件：不能多个进程共享同一数据文件（部署文档已说明）。
 - 导出整个测试集耗时约 33 s；`POST /export` 同步执行，大批量请考虑分批。
-- 真实数据仅包含 1 个 FluView 切片；其他数据源见 README 的「数据来源」占位。
+- 真实数据仅包含 1 个 FluView 来源（2 条序列）；其他数据源见 README 的「数据来源」占位。
 
 ## 7. 如何复现
 
 ```bash
-make test            # 245 unit/integration
-make e2e             # 504 black-box tests against a local `ailab serve`
+make test            # 301 unit/integration
+make e2e             # 518 black-box tests against a local `ailab serve`
 make e2e-slow        # timing tests
 make image && make e2e-container   # same suite against the podman/docker container
 make e2e-report      # regenerate the coverage tables from out/e2e-*.json
@@ -99,7 +100,8 @@ make e2e-report      # regenerate the coverage tables from out/e2e-*.json
 
 ## English summary
 
-- 245 unit/integration tests + 504 black-box e2e tests (HTTP only) run against both a local `ailab serve` process and a hardened container (read-only FS, non-root, all caps dropped): 498/503 passed, 0 failed, remaining are target-specific skips. 5 slow/perf tests pass on both.
-- All 24 documented operations are covered across 11 scenarios (system, auth, CRUD/validation, 55-case synthetic + real FluView test set, derive safety with ~100 hostile expressions, alerts, forecast, export, limits/CORS/injection, concurrency, persistence).
+- v0.3.0: 301 unit/integration tests + 518 black-box e2e tests (HTTP only) run against both a local `ailab serve` process and a hardened container (read-only FS, non-root, all caps dropped): 512/518 (local) and 517/518 (container) passed, 0 failed, remaining are target-specific skips. 5 slow/perf tests pass on both.
+- All 25 documented operations are covered across 11 scenarios (system, auth, CRUD/validation, 55-case synthetic + real FluView test set, derive safety with ~100 hostile expressions, alerts, forecast, export, limits/CORS/injection, concurrency, persistence).
 - Performance: 10-year (520-week) weekly forecast ≈ 3.8 s; 100-year series ≈ 8 s after capping model history at 840 weeks (was 276 s).
+- v0.3 adds the quality gate: every reason code is triggered by a crafted series; good seasonal and real FluView series are not refused (see BENCHMARK.md for rates).
 - Five bugs found and fixed (slow long-history forecast, export-budget 500, non-atomic create, delete/read race 500, noisy config error), each with a regression test.

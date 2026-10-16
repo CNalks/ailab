@@ -2,9 +2,9 @@
 
 | command | what | time |
 |---|---|---|
-| `make test` (`uv run pytest`) | ~250 unit/API tests with FastAPI's `TestClient`, synthetic data, no network | ~25 s |
+| `make test` (`uv run pytest`) | ~300 unit/API tests with FastAPI's `TestClient`, synthetic data, no network | ~25 s |
 | `make lint` | `ruff check` + `ruff format --check` | 2 s |
-| `make e2e` | **black-box** suite (~500 tests): starts real `ailab serve` processes and talks HTTP | ~1.5 min |
+| `make e2e` | **black-box** suite (~520 tests): starts real `ailab serve` processes and talks HTTP | ~1.5 min |
 | `make e2e-slow` | adds the slow performance tests (10/20/50/100-year weekly series, whole-set export) | +1 min |
 | `make e2e-container` | the same suite against a container built from the `Dockerfile` (read-only fs, non-root, volumes) | ~2.5 min |
 | `make e2e-report` | markdown coverage table from `out/e2e-*.json` | – |
