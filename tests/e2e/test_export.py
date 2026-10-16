@@ -5,7 +5,7 @@ import time
 import pytest
 
 from .conftest import body
-from .harness import REC, Api, Instance, KEY
+from .harness import KEY, REC, Api, Instance
 
 
 @pytest.fixture(scope="module")

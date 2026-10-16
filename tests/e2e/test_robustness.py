@@ -224,9 +224,15 @@ def test_trailing_slash_and_case(api):
 def test_nan_inf_via_raw_json_are_422(api, uid):
     for tok in ("NaN", "Infinity", "-Infinity", "1e999"):
         raw = (
-            '{"meta":{"series_id":"%s","name":"n","indicator_type":"count"},'
-            '"observations":[{"ds":"2020-01-05","y":%s}]}' % (uid(), tok)
-        ).encode()
+            json.dumps(
+                {
+                    "meta": {"series_id": uid(), "name": "n", "indicator_type": "count"},
+                    "observations": [{"ds": "2020-01-05", "y": 0}],
+                }
+            )
+            .replace('"y": 0', f'"y": {tok}')
+            .encode()
+        )
         r = api.w(
             "POST", "/api/v1/series", content=raw, headers={"Content-Type": "application/json"}
         )
