@@ -1,0 +1,206 @@
+---
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import HealthBadge from "./HealthBadge.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+import { localizePath, type Locale } from "../i18n/config";
+import { t } from "../i18n";
+import type { NavItem } from "../layouts/BaseLayout.astro";
+
+interface Props {
+  locale: Locale;
+  neutralPath: string;
+  nav?: NavItem[];
+}
+
+const { locale, neutralPath } = Astro.props;
+const home = localizePath("/", locale);
+const nav: NavItem[] = Astro.props.nav ?? [
+  { href: `${home}#series`, label: t(locale, "nav.series") },
+  { href: `${home}#pipeline`, label: t(locale, "nav.pipeline") },
+  { href: `${home}#quickstart`, label: t(locale, "nav.quickstart") },
+  { href: `${home}#methods`, label: t(locale, "nav.methods") },
+  { href: `${home}#licences`, label: t(locale, "nav.licences") },
+  { href: "https://github.com/CNalks/ailab", label: t(locale, "nav.github") }
+];
+---
+
+<header class="header">
+  <div class="inner">
+    <a class="brand" href={home}>
+      <span class="mark" aria-hidden="true">a</span>
+      <span>ailab</span>
+    </a>
+    <nav class="nav desktop" aria-label={t(locale, "nav.label")}>
+      <ul>
+        {nav.map((item) => (
+          <li><a href={item.href} >{item.label}</a></li>
+        ))}
+      </ul>
+    </nav>
+    <HealthBadge locale={locale} />
+    <ThemeToggle locale={locale} />
+    <LanguageSwitcher locale={locale} neutralPath={neutralPath} />
+    <details class="menu" data-dismissable>
+      <summary aria-label={t(locale, "nav.menu")}>
+        <span class="bars" aria-hidden="true"><i></i><i></i></span>
+      </summary>
+      <nav class="sheet" aria-label={t(locale, "nav.label")}>
+        <ul>
+          {nav.map((item) => (
+            <li><a href={item.href} >{item.label}</a></li>
+          ))}
+        </ul>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<script>
+  // Close open dropdowns on outside click, Escape, or after choosing a link.
+  const open = () => document.querySelectorAll<HTMLDetailsElement>("details[data-dismissable][open]");
+  document.addEventListener("click", (e) => {
+    const target = e.target as Element;
+    open().forEach((d) => {
+      if (!d.contains(target) || target.closest("a")) d.open = false;
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") open().forEach((d) => { d.open = false; d.querySelector("summary")?.focus(); });
+  });
+</script>
+
+<style>
+  .header {
+    padding-top: env(safe-area-inset-top);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  /* The blur lives on a pseudo-element: backdrop-filter on .header itself would
+     make it the containing block for the position:fixed menu sheet, collapsing
+     the sheet to the header's height. */
+  .header::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--glass);
+    backdrop-filter: var(--scrim-blur);
+    -webkit-backdrop-filter: var(--scrim-blur);
+    box-shadow: 0 1px 0 var(--line);
+  }
+  .inner {
+    position: relative;
+    width: min(var(--content), 100% - 2 * var(--gutter) - env(safe-area-inset-left) - env(safe-area-inset-right));
+    margin-inline: auto;
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: 44px;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    margin-right: auto;
+  }
+  .mark {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  ul { margin: 0; padding: 0; list-style: none; }
+  .desktop ul {
+    display: flex;
+    gap: clamp(var(--s-3), 2.5vw, var(--s-6));
+  }
+  .desktop a {
+    display: block;
+    padding: 12px 6px;
+    color: var(--ink-2);
+    font-size: 12px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--dur-base) var(--ease-apple);
+  }
+  .desktop a:hover, .desktop a[aria-current="page"] { color: var(--ink); }
+
+  /* Mobile menu */
+  .menu { display: none; }
+  .menu summary {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    margin-right: -10px;
+    cursor: pointer;
+    list-style: none;
+    color: var(--ink);
+  }
+  .menu summary::-webkit-details-marker { display: none; }
+  .bars { position: relative; width: 18px; height: 10px; }
+  .bars i {
+    position: absolute;
+    left: 0;
+    width: 18px;
+    height: 1.5px;
+    border-radius: 2px;
+    background: currentColor;
+    transition: transform var(--dur-base) var(--ease-apple), top var(--dur-base) var(--ease-apple);
+  }
+  .bars i:first-child { top: 0; }
+  .bars i:last-child { top: 8.5px; }
+  .menu[open] .bars i:first-child { top: 4.25px; transform: rotate(45deg); }
+  .menu[open] .bars i:last-child { top: 4.25px; transform: rotate(-45deg); }
+  .sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(var(--header-h) + env(safe-area-inset-top));
+    bottom: 0;
+    height: calc(100dvh - var(--header-h) - env(safe-area-inset-top));
+    z-index: 49;
+    overflow-y: auto;
+    padding: var(--s-4) calc(var(--gutter) + 8px + env(safe-area-inset-right)) calc(var(--s-7) + env(safe-area-inset-bottom)) calc(var(--gutter) + 8px + env(safe-area-inset-left));
+    overscroll-behavior: contain;
+    background: var(--bg);
+    backdrop-filter: var(--scrim-blur);
+    box-shadow: var(--shadow);
+    animation: sheet-in var(--dur-base) var(--ease-apple);
+  }
+  .sheet a {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+  .sheet li:last-child a { border-bottom: 0; }
+  @keyframes sheet-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* Lock page scroll while the full-screen menu is open. */
+  :global(html:has(.menu[open])) { overflow: hidden; }
+  @media (max-width: 760px) {
+    .desktop { display: none; }
+    .menu { display: block; }
+  }
+</style>

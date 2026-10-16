@@ -1,0 +1,51 @@
+---
+import { t } from "../i18n";
+import { asset, type Locale } from "../i18n/config";
+interface Props { locale: Locale; where?: "header" | "hero" }
+const { locale, where = "header" } = Astro.props;
+// Only runtime call of the whole site: GET /ailab-api/health (same origin). Failure => "offline · static showcase".
+const msgs = { online: t(locale, "health.online"), offline: t(locale, "health.offline"), checking: t(locale, "health.checking") };
+void asset;
+---
+
+<span class="health" data-where={where} data-health data-state="checking" data-msgs={JSON.stringify(msgs)} role="status" aria-live="polite">
+  <i aria-hidden="true"></i>
+  <span class="lbl">{t(locale, "health.label")}:</span>
+  <span class="val" data-health-text>{msgs.checking}</span>
+</span>
+
+<script>
+  import "../scripts/health";
+</script>
+
+<style>
+  .health {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink-2);
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .health i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background-color var(--dur-base) var(--ease-out);
+  }
+  .health[data-state="online"] i { background: var(--data); }
+  .health[data-state="offline"] i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .lbl { color: var(--muted); }
+  @media (max-width: 980px) { .lbl { display: none; } }
+  .health[data-where="hero"] { display: none; }
+  @media (max-width: 560px) {
+    .health[data-where="header"] { display: none; }
+    .health[data-where="hero"] { display: inline-flex; }
+  }
+</style>

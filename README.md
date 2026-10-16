@@ -44,6 +44,8 @@ curl -fsS "$AILAB_URL/api/v1/series/us_ilinet_wili/policy" | jq -c '{forecast_al
 {"forecast_allowed":true,"reason":"beats_seasonal_naive_in_rolling_origin_backtest","model_family":"mstl_ets","horizon_weeks":8}
 ```
 
+A static, trilingual showcase with five precomputed real series lives in [`site/`](docs/SHOWCASE_SITE.md).
+
 Interactive API docs: <http://127.0.0.1:8000/docs>. **Continue with the
 [5-minute tutorial](docs/TUTORIAL.md)** (create series, derive, forecast, alerts, export — every
 command in it is executed by the test suite).

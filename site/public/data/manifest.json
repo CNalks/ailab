@@ -1,0 +1,172 @@
+{
+ "schema_version": "1",
+ "ailab_version": "0.3.0",
+ "generated_at": "2026-10-16T16:38:26+00:00",
+ "static_precomputed": true,
+ "disclaimer": "Precomputed statistical analysis of public data; not official, not public-health advice.",
+ "series": [
+  {
+   "series_id": "us_ilinet_wili",
+   "name": "US national — Weighted ILI (% of outpatient visits)",
+   "path": "series/us_ilinet_wili.json",
+   "bytes": 41699,
+   "gzip_bytes": 10474,
+   "sha256": "8346afb8e2059a4bd8fc0d95985f2eeb696e1964564a64fe6f12df94f70a500b",
+   "data_through": "2026-09-27",
+   "indicator_type": "proportion",
+   "derived_from": [],
+   "source_id": "cdc_fluview",
+   "policy": {
+    "forecast_allowed": true,
+    "reason": "beats_seasonal_naive_in_rolling_origin_backtest",
+    "display_mode": "forecast_band",
+    "model_family": "theta",
+    "horizon_weeks": 8
+   },
+   "quality_grade": "A",
+   "gate": {
+    "decision": "allowed",
+    "confidence": "high",
+    "reason_codes": []
+   },
+   "latest_alert_signal": {
+    "ears_c2": false,
+    "cusum": false
+   },
+   "download": "downloads/us_ilinet_wili.parquet"
+  },
+  {
+   "series_id": "us_ilinet_ili_visits",
+   "name": "US national — ILI outpatient visits",
+   "path": "series/us_ilinet_ili_visits.json",
+   "bytes": 47943,
+   "gzip_bytes": 11859,
+   "sha256": "05284b742796e65f5e6fd5d72ddd124218abb4c813bf99aa11c096f2046a3118",
+   "data_through": "2026-09-27",
+   "indicator_type": "count",
+   "derived_from": [],
+   "source_id": "cdc_fluview",
+   "policy": {
+    "forecast_allowed": true,
+    "reason": "beats_seasonal_naive_in_rolling_origin_backtest",
+    "display_mode": "forecast_band",
+    "model_family": "theta",
+    "horizon_weeks": 8
+   },
+   "quality_grade": "A",
+   "gate": {
+    "decision": "allowed",
+    "confidence": "medium",
+    "reason_codes": [
+     "trend_nonstationary"
+    ]
+   },
+   "latest_alert_signal": {
+    "ears_c2": false,
+    "cusum": false,
+    "farrington": false
+   },
+   "download": "downloads/us_ilinet_ili_visits.parquet"
+  },
+  {
+   "series_id": "england_flu_positivity",
+   "name": "England: influenza test positivity (UKHSA)",
+   "path": "series/england_flu_positivity.json",
+   "bytes": 28252,
+   "gzip_bytes": 7416,
+   "sha256": "60a9bad620fa89773af9ab1423a9306f5696540fd0fc7eda011c42bf3b986c00",
+   "data_through": "2026-09-28",
+   "indicator_type": "proportion",
+   "derived_from": [],
+   "source_id": "ukhsa_dashboard",
+   "policy": {
+    "forecast_allowed": true,
+    "reason": "beats_seasonal_naive_in_rolling_origin_backtest",
+    "display_mode": "forecast_band",
+    "model_family": "mstl_ets",
+    "horizon_weeks": 4
+   },
+   "quality_grade": "B",
+   "gate": {
+    "decision": "limited",
+    "confidence": "low",
+    "reason_codes": [
+     "outlier_contamination",
+     "zero_runs"
+    ]
+   },
+   "latest_alert_signal": {
+    "ears_c2": true,
+    "cusum": false
+   },
+   "download": "downloads/england_flu_positivity.parquet"
+  },
+  {
+   "series_id": "eu_eea_flu_positivity",
+   "name": "EU/EEA: influenza positivity, primary-care sentinel (ERVISS)",
+   "path": "series/eu_eea_flu_positivity.json",
+   "bytes": 18877,
+   "gzip_bytes": 5451,
+   "sha256": "b673164254ae0140b0172ac1426f5f56979cf7ac26be82be804efd980366d291",
+   "data_through": "2026-10-05",
+   "indicator_type": "proportion",
+   "derived_from": [],
+   "source_id": "ecdc_erviss",
+   "policy": {
+    "forecast_allowed": false,
+    "reason": "backtest_lt_3_seasons",
+    "display_mode": "monitor_only",
+    "model_family": "none",
+    "horizon_weeks": 0
+   },
+   "quality_grade": "A",
+   "gate": {
+    "decision": "refused",
+    "confidence": "none",
+    "reason_codes": [
+     "insufficient_backtest",
+     "outlier_contamination"
+    ]
+   },
+   "latest_alert_signal": {
+    "ears_c2": false,
+    "cusum": false
+   },
+   "download": "downloads/eu_eea_flu_positivity.parquet"
+  },
+  {
+   "series_id": "malta_flu_detections",
+   "name": "Malta: influenza detections, primary-care sentinel (ERVISS)",
+   "path": "series/malta_flu_detections.json",
+   "bytes": 10138,
+   "gzip_bytes": 3262,
+   "sha256": "b7482595868471b2efd430b44415ff84fc421297fc47e1dabd8f03b8db9bfedb",
+   "data_through": "2023-10-09",
+   "indicator_type": "count",
+   "derived_from": [],
+   "source_id": "ecdc_erviss",
+   "policy": {
+    "forecast_allowed": false,
+    "reason": "history_lt_3_seasons",
+    "display_mode": "monitor_only",
+    "model_family": "none",
+    "horizon_weeks": 0
+   },
+   "quality_grade": "C",
+   "gate": {
+    "decision": "refused",
+    "confidence": "none",
+    "reason_codes": [
+     "too_short",
+     "too_many_gaps"
+    ]
+   },
+   "latest_alert_signal": {
+    "ears_c2": false,
+    "cusum": false
+   },
+   "download": "downloads/malta_flu_detections.parquet"
+  }
+ ],
+ "sources": "sources.json"
+}

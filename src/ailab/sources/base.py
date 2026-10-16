@@ -38,6 +38,38 @@ _SOURCES: dict[str, SourceInfo] = {
         "They are not CDC/HHS products, are not endorsed by CDC/HHS, and are not public-health "
         "advice. The original data are available free of charge from CDC.",
     ),
+    "ukhsa_dashboard": SourceInfo(
+        source_id="ukhsa_dashboard",
+        name="UKHSA data dashboard: influenza testing positivity by week (England)",
+        publisher="UK Health Security Agency (UKHSA)",
+        url="https://api.ukhsa-dashboard.data.gov.uk/",
+        docs_url="https://ukhsa-dashboard.data.gov.uk/",
+        licence="Open Government Licence v3.0 (dashboard footer: 'All content is available under the "
+        "Open Government Licence v3.0, except where otherwise stated'; (c) Crown copyright)",
+        licence_url="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+        attribution="Contains public sector information published by the UK Health Security Agency "
+        "(UKHSA) and licensed under the Open Government Licence v3.0.",
+        notice="Forecasts and alerts shown here are our own statistical analysis of public data. "
+        "They are not UKHSA products, are not endorsed by UKHSA and are not public-health advice.",
+    ),
+    "ecdc_erviss": SourceInfo(
+        source_id="ecdc_erviss",
+        name="ECDC ERVISS: primary-care sentinel respiratory virus data (weekly), "
+        "Respiratory_viruses_weekly_data",
+        publisher="European Centre for Disease Prevention and Control (ECDC), based on data from "
+        "reporting countries and/or WHO",
+        url="https://github.com/EU-ECDC/Respiratory_viruses_weekly_data",
+        docs_url="https://erviss.org/",
+        licence="ECDC copyright page: ECDC-owned content is CC BY 4.0 (credit ECDC, link the licence, "
+        "indicate modifications); third-party data from reporting countries may be reused "
+        "if the dataset-provided-by-ECDC sentence is given",
+        licence_url="https://www.ecdc.europa.eu/en/copyright",
+        attribution="Dataset provided by ECDC based on data provided by public health authorities, "
+        "scientific institutes or health care providers in the relevant reporting countries "
+        "and/or by WHO. Weekly values are unchanged; analysis added by us.",
+        notice="Forecasts, quality gates and alerts shown here are our own statistical analysis "
+        "(modified/derived material). They are not ECDC products and are not endorsed by ECDC.",
+    ),
 }
 
 

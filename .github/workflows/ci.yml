@@ -20,6 +20,33 @@ jobs:
       - run: uv run pytest
       - name: Demo end to end (offline fixture)
         run: uv run ailab demo --out out && test -s out/manifest.json
+  site:
+    # static showcase (site/): regenerate the data with the real pipeline, then type-check and build the Astro site
+    runs-on: ubuntu-24.04
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: uv sync --frozen
+      - run: uv run python scripts/build_showcase_data.py
+      - name: Fetch the shared design tokens over https (lockfile records git+ssh)
+        run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
+      - name: Static output has the three languages and the data
+        run: |
+          test -s site/dist/index.html && test -s site/dist/en/index.html && test -s site/dist/fr/index.html
+          test -s site/dist/data/manifest.json && test -s site/dist/data/series/us_ilinet_wili.json
   e2e:
     # black-box API tests against a real `ailab serve` process (about 1.5 min)
     runs-on: ubuntu-24.04

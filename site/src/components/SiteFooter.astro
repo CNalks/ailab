@@ -1,0 +1,54 @@
+---
+import { t } from "../i18n";
+import type { Locale } from "../i18n/config";
+
+interface Props {
+  locale: Locale;
+  /** Flush against the last page block (homepage): panel tone, no rule, no top margin. */
+  flush?: boolean;
+}
+const { locale, flush = false } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<footer class:list={["footer", { flush }]}>
+  <div class="container inner">
+    <p>© {year} <a class="inline" href="https://github.com/CNalks">CNalks</a> · {t(locale, "footer.note")}<br />{t(locale, "footer.disclaimer")}</p>
+    <p class="links"><a href="https://github.com/CNalks/ailab">{t(locale, "nav.github")}</a> <a href="/">{t(locale, "nav.home")}</a></p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    margin-top: var(--s-9);
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: var(--text-sm);
+  }
+  .inner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--s-3) var(--s-5);
+    padding-block: var(--s-6) calc(var(--s-6) + env(safe-area-inset-bottom));
+    padding-inline: max(0px, env(safe-area-inset-left)) max(0px, env(safe-area-inset-right));
+  }
+  .flush {
+    margin-top: 0;
+    background: var(--panel);
+    border-top: 0;
+    font-size: 12px;
+  }
+  .links { display: flex; gap: var(--s-5); }
+  a.inline { display: inline; min-height: 0; margin: 0; text-decoration: underline; }
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -12px;
+    color: var(--ink-2);
+  }
+  a:hover {
+    color: var(--ink);
+  }
+</style>

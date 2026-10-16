@@ -1,0 +1,113 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--bg);
+  scroll-padding-top: calc(var(--header-h) + var(--s-4));
+}
+
+/* SiteHeader wraps nav onto a second row below 680px; keep anchor scrolls clear of it. */
+@media (max-width: 680px) {
+  html {
+    scroll-padding-top: calc(var(--header-h) * 2 + var(--s-4));
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+html:lang(zh-CN) body {
+  line-height: 1.75;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* Long French/English words: hyphenate body copy, never headings' brand names. */
+html:lang(fr) :is(p, dd, li, td),
+html:lang(en) :is(p, dd, td) {
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus);
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.container {
+  width: min(var(--content), 100% - 2 * var(--gutter) - env(safe-area-inset-left) - env(safe-area-inset-right));
+  margin-inline: auto;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+
+
+/* Theme switch: briefly ease colours while the user toggles (class set by the toggle handler, removed after 500 ms). */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-fading, html.theme-fading *, html.theme-fading *::before, html.theme-fading *::after {
+    transition: background-color var(--dur-slow) var(--ease-out), color var(--dur-slow) var(--ease-out), border-color var(--dur-slow) var(--ease-out), fill var(--dur-slow) var(--ease-out), stroke var(--dur-slow) var(--ease-out) !important;
+  }
+}
+
+/* Headings and short centred lines: wrap whole words only. */
+h1, h2, h3, h4 {
+  hyphens: manual;
+  overflow-wrap: break-word;
+}
