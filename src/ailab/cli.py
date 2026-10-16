@@ -318,8 +318,18 @@ def derive_recompute(series_id: str, db: Path = DB_REQ):
     typer.echo(f"recomputed {series_id}: {len(d.data)} weeks, kind={d.meta.indicator_type}")
 
 
-@app.command()
+synth_app = typer.Typer(
+    invoke_without_command=True,
+    help="Deterministic synthetic data. `ailab synth --kind count ...` writes one CSV; "
+    "`ailab synth testset` writes the API test-data set; `ailab synth load` loads it into a "
+    "running service.",
+)
+app.add_typer(synth_app, name="synth")
+
+
+@synth_app.callback()
 def synth(
+    ctx: typer.Context,
     out: Path = typer.Option(Path("synthetic.csv"), help="CSV output (ds,y)."),
     kind: str = typer.Option("count", help="count | proportion"),
     weeks: int = typer.Option(312, min=10, max=5200),
@@ -328,11 +338,55 @@ def synth(
     missing_frac: float = typer.Option(0.0, min=0.0, max=0.5),
 ):
     """Write a deterministic synthetic weekly series (dev/testing; seeded)."""
+    if ctx.invoked_subcommand is not None:
+        return
     from .synth import synth_series
 
-    df = synth_series(weeks, kind, seed, season_length=season_length, missing_frac=missing_frac)
+    try:
+        df = synth_series(weeks, kind, seed, season_length=season_length, missing_frac=missing_frac)
+    except ValueError as exc:
+        raise _fail(exc) from None
     df.to_csv(out, index=False)
     typer.echo(f"wrote {len(df)} weeks ({kind}, seed={seed}) -> {out}")
+
+
+@synth_app.command("testset")
+def synth_testset(
+    out: Path = typer.Option(Path("tests/data/synthetic"), help="Output directory."),
+):
+    """Write the reusable API test-data set (one JSON body per case + manifest.json)."""
+    from .testset import build_cases, write_testset
+
+    cases = build_cases()
+    write_testset(out, cases)
+    n_ok = sum(c.expect == "accept" for c in cases)
+    typer.echo(f"wrote {len(cases)} cases ({n_ok} accepted, {len(cases) - n_ok} invalid) -> {out}/")
+
+
+@synth_app.command("load")
+def synth_load(
+    url: str = typer.Option("http://127.0.0.1:8000", help="Base URL of a running service."),
+    key: str = typer.Option(..., envvar="AILAB_API_KEY", help="Service write key."),
+    directory: Path | None = typer.Option(
+        None, "--dir", help="Load from a directory written by `synth testset` (default: generate)."
+    ),
+    derive: bool = typer.Option(True, help="Also create ts_pair_positivity = positives / tests."),
+):
+    """Load the test-data set through the REST API and check each case's expected outcome."""
+    from .testset import build_cases, load_into_service, read_testset
+
+    cases = read_testset(directory) if directory else build_cases()
+    try:
+        results = load_into_service(url, key, cases, derive=derive)
+    except Exception as exc:
+        raise _fail(exc) from None
+    bad = [r for r in results if not r["ok"]]
+    for r in results:
+        typer.echo(
+            f"{'ok  ' if r['ok'] else 'FAIL'} {r['status']} {r['case_id']:<28} {r['expect']}"
+        )
+    typer.echo(f"{len(results) - len(bad)}/{len(results)} as expected")
+    raise typer.Exit(1 if bad else 0)
 
 
 @app.command()
