@@ -79,6 +79,7 @@ def lim_svc(workdir):
         "lim",
         {
             "AILAB_API_KEY": KEY,
+            "AILAB_PRELOAD_DEMO": "0",
             "AILAB_MAX_SERIES": "4",
             "AILAB_MAX_OBSERVATIONS": "60",
             "AILAB_MAX_BODY_BYTES": "8192",

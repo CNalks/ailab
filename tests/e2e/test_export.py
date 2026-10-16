@@ -11,7 +11,7 @@ from .harness import KEY, REC, Api, Instance
 @pytest.fixture(scope="module")
 def exp(workdir):
     """Own instance without demo data: /export analyses *every* series, keep it small."""
-    inst = Instance("exp", {"AILAB_API_KEY": KEY}, workdir)
+    inst = Instance("exp", {"AILAB_API_KEY": KEY, "AILAB_PRELOAD_DEMO": "0"}, workdir)
     with Api(inst.url) as c:
         for i in range(2):
             ys = [float((j * 7 + i) % 23 + 1) for j in range(160)]
