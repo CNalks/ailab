@@ -1,0 +1,216 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import HealthBadge from "../components/HealthBadge.astro";
+import SeriesCard from "../components/SeriesCard.astro";
+import { t, type MessageKey } from "../i18n";
+import { formatDate } from "../i18n/format";
+import { htmlLang, type Locale } from "../i18n/config";
+import { manifest, sources, series, SERIES_IDS } from "../lib/data";
+
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const man = manifest();
+const srcs = sources();
+const srcById = Object.fromEntries(srcs.map((s) => [s.source_id, s]));
+const results = SERIES_IDS.map((id) => ({ id, res: series(id), entry: man.series.find((m) => m.series_id === id) }));
+const used = new Set(results.map((r) => r.res.series.source_id));
+const built = formatDate(locale, man.generated_at.slice(0, 10));
+const lines = (s: string) => s.split("\n");
+const steps = [1, 2, 3, 4] as const;
+const rows = [1, 2, 3, 4, 5, 6] as const;
+const qsDocker = `docker run --rm -p 127.0.0.1:8000:8000 ghcr.io/cnalks/ailab:v0.3.0
+# http://127.0.0.1:8000/docs  ·  /health`;
+const qsPy = `pip install "git+https://github.com/CNalks/ailab@v0.3.0"   # Python 3.12
+ailab demo --out out                  # offline batch: static JSON + Parquet
+ailab gate us_ilinet_wili --lang ${locale === "zh-cn" ? "zh" : locale}   # allowed / limited / refused + reasons
+ailab forecast us_ilinet_wili --h 8`;
+const qsApi = `curl -s http://127.0.0.1:8000/api/v1/series/us_ilinet_wili/gate
+curl -s "http://127.0.0.1:8000/api/v1/series/us_ilinet_wili/forecast?horizon=8"`;
+const gh = "https://github.com/CNalks/ailab";
+---
+
+<BaseLayout locale={locale} title={t(locale, "meta.title")} description={t(locale, "meta.desc")}>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="container hero-in">
+      <p class="eyebrow" data-rise style="--d:0">{t(locale, "hero.kicker")}</p>
+      <h1 id="hero-title" data-rise style="--d:1">{lines(t(locale, "hero.title")).map((l, i) => <>{i > 0 && <br />}{l}</>)}</h1>
+      <p class="sub" data-rise style="--d:2">{t(locale, "hero.sub")}</p>
+      <div class="cta" data-rise style="--d:3">
+        <a class="btn primary press" href="#quickstart">{t(locale, "hero.cta1")}</a>
+        <a class="btn press" href={gh}>{t(locale, "hero.cta2")}</a>
+      </div>
+      <p class="chip" data-rise style="--d:4">{t(locale, "hero.chip")}</p>
+      <HealthBadge locale={locale} where="hero" />
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="what-title">
+    <div class="container">
+      <h2 id="what-title" class="reveal">{t(locale, "what.title")}</h2>
+      <div class="three">
+        {(["lib", "cli", "api"] as const).map((k) => (
+          <div class="tile reveal lift">
+            <h3>{t(locale, `what.${k}.t` as MessageKey)}</h3>
+            <p>{t(locale, `what.${k}.d` as MessageKey)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="block tint" id="pipeline" aria-labelledby="pipe-title">
+    <div class="container">
+      <h2 id="pipe-title" class="reveal">{t(locale, "pipe.title")}</h2>
+      <p class="lead reveal">{t(locale, "pipe.lead")}</p>
+      <ol class="flow" role="list">
+        {steps.map((n, i) => (
+          <li class="reveal">
+            <div class="step" data-step={n}>
+              <span class="n" aria-hidden="true">{n}</span>
+              <h3>{t(locale, `pipe.s${n}.t` as MessageKey)}</h3>
+              <p>{t(locale, `pipe.s${n}.d` as MessageKey)}</p>
+            </div>
+            {i < steps.length - 1 && <svg class="arrow" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12h13m-5-5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="block" id="series" aria-labelledby="series-title">
+    <div class="container">
+      <h2 id="series-title" class="reveal">{t(locale, "series.title")}</h2>
+      <p class="lead reveal">{t(locale, "series.lead", { built })}</p>
+      <div class="cards">
+        {results.map((r) => (
+          <div class="reveal"><SeriesCard id={r.id} res={r.res} entry={r.entry} source={srcById[r.res.series.source_id]} locale={locale} /></div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="block tint" id="quickstart" aria-labelledby="qs-title">
+    <div class="container">
+      <h2 id="qs-title" class="reveal">{t(locale, "qs.title")}</h2>
+      <p class="lead reveal">{t(locale, "qs.lead")}</p>
+      <div class="qs">
+        <div class="reveal"><h3>{t(locale, "qs.docker")}</h3><pre tabindex="0"><code>{qsDocker}</code></pre></div>
+        <div class="reveal"><h3>{t(locale, "qs.python")}</h3><pre tabindex="0"><code>{qsPy}</code></pre></div>
+        <div class="reveal"><h3>{t(locale, "qs.api")}</h3><pre tabindex="0"><code>{qsApi}</code></pre></div>
+      </div>
+      <p class="note reveal">{t(locale, "qs.note")}</p>
+      <h3 class="reveal sub-h">{t(locale, "qs.links")}</h3>
+      <ul class="links reveal" role="list">
+        <li><a href={`${gh}/blob/main/docs/API.md`}>{t(locale, "qs.l1")}</a></li>
+        <li><a href={`${gh}/blob/main/docs/TUTORIAL.md`}>{t(locale, "qs.l2")}</a></li>
+        <li><a href={`${gh}/blob/main/docs/MODEL_POLICY.md`}>{t(locale, "qs.l3")}</a></li>
+        <li><a href={gh}>{t(locale, "qs.l4")}</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="methods" aria-labelledby="methods-title">
+    <div class="container">
+      <h2 id="methods-title" class="reveal">{t(locale, "methods.title")}</h2>
+      <p class="lead reveal">{t(locale, "methods.lead")}</p>
+      <div class="scroll reveal" tabindex="0" role="region" aria-label={t(locale, "methods.title")}>
+        <table class="mt">
+          <thead><tr><th scope="col">{t(locale, "methods.need")}</th><th scope="col">{t(locale, "methods.lib")}</th><th scope="col">{t(locale, "methods.custom")}</th></tr></thead>
+          <tbody>
+            {rows.map((n) => (
+              <tr><th scope="row">{t(locale, `m.${n}.n` as MessageKey)}</th><td>{t(locale, `m.${n}.l` as MessageKey)}</td><td>{t(locale, `m.${n}.c` as MessageKey)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="block tint" id="licences" aria-labelledby="lic-title">
+    <div class="container">
+      <h2 id="lic-title" class="reveal">{t(locale, "lic.title")}</h2>
+      <div class="two">
+        <div class="tile reveal"><h3>{t(locale, "lic.code")}</h3><p>{t(locale, "lic.code.d")} <a href="https://github.com/CNalks">github.com/CNalks</a> · <a href={`${gh}/blob/main/LICENSE`}>Apache-2.0</a></p></div>
+        <div class="tile reveal"><h3>{t(locale, "lic.data")}</h3><p>{t(locale, "lic.data.d")}</p></div>
+      </div>
+      <div class="srcs">
+        {srcs.filter((s) => used.has(s.source_id)).map((s) => (
+          <article class="tile src reveal" lang="en">
+            <h3>{s.name}</h3>
+            <p class="pub">{s.publisher}</p>
+            <dl>
+              <div><dt lang={htmlLang[locale]}>{t(locale, "lic.licence")}</dt><dd><a href={s.licence_url}>{s.licence}</a></dd></div>
+              <div><dt lang={htmlLang[locale]}>{t(locale, "lic.attr")}</dt><dd>{s.attribution}</dd></div>
+              <div><dt lang={htmlLang[locale]}>{t(locale, "lic.notice")}</dt><dd>{s.notice}</dd></div>
+              <div><dt lang={htmlLang[locale]}>{t(locale, "lic.series")}</dt><dd>{results.filter((r) => r.res.series.source_id === s.source_id).map((r, i) => (<span>{i > 0 && " · "}<a href={`#s-${r.id}`} lang={htmlLang[locale]}>{t(locale, `s.${r.id}.n` as MessageKey)}</a></span>))}</dd></div>
+            </dl>
+          </article>
+        ))}
+      </div>
+      <aside class="disc reveal"><h3>{t(locale, "disc.title")}</h3><p>{t(locale, "disc.body")}</p></aside>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .container { position: relative; }
+  .hero { padding: clamp(48px, 9vw, 112px) 0 clamp(40px, 7vw, 80px); background: linear-gradient(180deg, var(--bg) 0%, var(--panel-tint) 100%); text-align: center; }
+  .hero-in { display: flex; flex-direction: column; align-items: center; gap: var(--s-4); }
+  .eyebrow { font-size: var(--text-sm); font-weight: 600; color: var(--data); letter-spacing: 0.02em; font-family: var(--font-mono); }
+  h1 { font-size: var(--text-display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
+  .sub { max-width: 62ch; color: var(--ink-2); font-size: var(--text-lg); }
+  .cta { display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: center; margin-top: var(--s-3); }
+  .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: var(--radius-pill); font-weight: 600; font-size: 15px; text-decoration: none; color: var(--accent-ink); background: var(--accent-soft); transition: background-color var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple); }
+  .btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .btn.primary { color: var(--on-accent); background: var(--accent); }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .chip { color: var(--muted); font-size: var(--text-xs); }
+  .block { padding: clamp(48px, 8vw, 96px) 0; }
+  .block.tint { background: var(--panel); }
+  h2 { font-size: var(--text-2xl); letter-spacing: -0.02em; }
+  .lead { margin-top: var(--s-3); color: var(--ink-2); max-width: 72ch; }
+  h3 { font-size: var(--text-lg); letter-spacing: -0.01em; }
+  .three, .two { display: grid; gap: var(--s-4); margin-top: var(--s-5); }
+  .three { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .tile { padding: var(--s-5); border-radius: var(--radius-lg); background: var(--bg-elev); border: 1px solid var(--line); }
+  .tile p { margin-top: var(--s-2); color: var(--ink-2); font-size: var(--text-sm); }
+  .tile a, .note a, .links a { color: var(--accent-ink); }
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: var(--s-6) 0 0; padding: 0; list-style: none; }
+  .flow li { position: relative; display: flex; align-items: stretch; }
+  .step { flex: 1; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--bg-elev); border: 1px solid var(--line); margin-right: var(--s-6); }
+  .flow li:last-child .step { margin-right: 0; }
+  .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 700; margin-bottom: var(--s-3); background: var(--data-soft); color: var(--data); }
+  .step[data-step="2"] .n { background: color-mix(in srgb, var(--indigo) 14%, transparent); color: var(--indigo); }
+  .step[data-step="4"] .n { background: var(--event-soft); color: var(--event-ink); }
+  .step p { margin-top: var(--s-2); font-size: var(--text-sm); color: var(--ink-2); }
+  .arrow { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); margin-top: var(--s-6); }
+  .qs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); margin-top: var(--s-5); }
+  .qs h3 { margin-bottom: var(--s-2); }
+  pre { margin: 0; padding: var(--s-4) var(--s-5); overflow-x: auto; border-radius: var(--radius); background: var(--bg-elev); border: 1px solid var(--line); font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--ink); }
+  .note { margin-top: var(--s-4); color: var(--muted); font-size: var(--text-sm); max-width: 72ch; }
+  .sub-h { margin-top: var(--s-6); }
+  .links { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); list-style: none; padding: 0; margin: var(--s-3) 0 0; }
+  .scroll { overflow-x: auto; margin-top: var(--s-5); border-radius: var(--radius-lg); border: 1px solid var(--line); background: var(--bg-elev); }
+  .mt { width: 100%; border-collapse: collapse; font-size: var(--text-sm); min-width: 720px; }
+  .mt th, .mt td { padding: 12px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  .mt thead th { color: var(--muted); font-size: var(--text-xs); letter-spacing: 0.04em; text-transform: uppercase; background: var(--panel); }
+  .mt tbody th { font-weight: 600; width: 16%; }
+  .mt td { color: var(--ink-2); }
+  .mt tr:last-child > * { border-bottom: 0; }
+  .srcs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); margin-top: var(--s-4); }
+  .src h3 { font-size: var(--text-base); }
+  .pub { color: var(--muted) !important; }
+  .src dl { margin: var(--s-3) 0 0; display: grid; gap: var(--s-3); }
+  .src dt { color: var(--muted); font-size: var(--text-xs); letter-spacing: 0.04em; text-transform: uppercase; }
+  .src dd { margin: 2px 0 0; font-size: var(--text-sm); color: var(--ink-2); }
+  .disc { margin-top: var(--s-5); padding: var(--s-5); border-radius: var(--radius-lg); border: 1px dashed var(--line-strong); }
+  .disc p { margin-top: var(--s-2); color: var(--ink-2); font-size: var(--text-sm); }
+  @media (max-width: 860px) {
+    .flow { grid-template-columns: 1fr; gap: var(--s-3); }
+    .step { margin-right: 0; }
+    .arrow { right: 50%; top: auto; bottom: -22px; transform: translateX(50%) rotate(90deg); z-index: 1; }
+    .flow li { padding-bottom: 0; }
+  }
+</style>

@@ -1,0 +1,124 @@
+---
+import "../styles/base.css";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import { htmlLang, locales, localizePath, ogLocale, stripLocale, defaultLocale, asset, type Locale } from "../i18n/config";
+import { t } from "../i18n";
+import tokens from "@cnalks/design-tokens/tokens.json";
+
+export interface NavItem {
+  href: string;
+  label: string;
+}
+
+interface Props {
+  locale: Locale;
+  title: string;
+  description: string;
+  /** Section links shown in the header; defaults to the site-wide nav. */
+  nav?: NavItem[];
+  ogImage?: string;
+}
+
+const { locale, title, description, nav, ogImage = "/og.png" } = Astro.props;
+const site = Astro.site ?? new URL("https://www.cnalks.cn");
+const neutralPath = stripLocale(Astro.url.pathname);
+const canonical = new URL(localizePath(neutralPath, locale), site).href;
+const alternates = locales.map((l) => ({ hreflang: htmlLang[l], href: new URL(localizePath(neutralPath, l), site).href }));
+// <meta theme-color> follows the shared page backgrounds (no hard-coded hex)
+const themeBg = { light: tokens.themes.light["--bg"], dark: tokens.themes.dark["--bg"] };
+const xDefault = new URL(localizePath(neutralPath, defaultLocale), site).href;
+---
+
+<!doctype html>
+<html lang={htmlLang[locale]}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content={themeBg.light} media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content={themeBg.dark} media="(prefers-color-scheme: dark)" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)}
+    <link rel="alternate" hreflang="x-default" href={xDefault} />
+    <link rel="icon" href={asset("/favicon.svg")} type="image/svg+xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={t(locale, "site.name")} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL(asset(ogImage), site).href} />
+    <meta property="og:locale" content={ogLocale[locale]} />
+    {locales.filter((l) => l !== locale).map((l) => <meta property="og:locale:alternate" content={ogLocale[l]} />)}
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Theme before first paint (no flash): stored choice (cnalks-theme) else the OS preference; light if neither is available.
+         Toggling persists the choice; until then the page keeps following the OS setting. -->
+    <script is:inline define:vars={{ themeBg }}>
+      (function () {
+        var KEY = "cnalks-theme", root = document.documentElement, mq = window.matchMedia("(prefers-color-scheme: dark)");
+        function stored() { try { var v = localStorage.getItem(KEY); return v === "dark" || v === "light" ? v : null; } catch (e) { return null; } }
+        function apply(th) {
+          root.setAttribute("data-theme", th);
+          var m = document.querySelectorAll('meta[name="theme-color"]');
+          for (var i = 0; i < m.length; i++) { m[i].setAttribute("content", themeBg[th]); m[i].removeAttribute("media"); }
+          document.querySelectorAll("[data-theme-toggle]").forEach(function (b) { b.setAttribute("aria-pressed", String(th === "dark")); });
+        }
+        function system() { return mq.matches ? "dark" : "light"; }
+        apply(stored() || system());
+        window.__setTheme = function (th) {
+          root.classList.add("theme-fading");
+          apply(th);
+          try { localStorage.setItem(KEY, th); } catch (e) {}
+          setTimeout(function () { root.classList.remove("theme-fading"); }, 600);
+        };
+        var onSys = function () { if (!stored()) apply(system()); };
+        if (mq.addEventListener) mq.addEventListener("change", onSys);
+        document.addEventListener("DOMContentLoaded", function () { apply(root.getAttribute("data-theme") || "light"); });
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{t(locale, "nav.skip")}</a>
+    <SiteHeader locale={locale} neutralPath={neutralPath} nav={nav} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter locale={locale} />
+    <script>
+      import "../scripts/motion";
+      document.addEventListener("click", (e) => {
+        const btn = (e.target as Element).closest("[data-theme-toggle]");
+        if (!btn) return;
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        (window as unknown as { __setTheme: (t: string) => void }).__setTheme(next);
+      });
+    </script>
+  </body>
+</html>
+
+<style>
+  .skip-link {
+    position: absolute;
+    left: var(--s-4);
+    top: -100px;
+    z-index: 100;
+    padding: var(--s-2) var(--s-4);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .skip-link:focus {
+    top: var(--s-3);
+  }
+  main {
+    flex: 1;
+  }
+  main:focus {
+    outline: none;
+  }
+</style>

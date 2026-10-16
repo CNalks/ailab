@@ -1,0 +1,11 @@
+survtype,countryname,yearweek,pathogen,pathogentype,pathogensubtype,indicator,age,value
+primary care sentinel,Malta,2023-W41,Influenza,Influenza,total,detections,total,2.0
+primary care sentinel,Malta,2023-W01,Influenza,Influenza,total,detections,total,2.0
+primary care sentinel,Malta,2022-W52,Influenza,Influenza,total,detections,total,1.0
+primary care sentinel,Malta,2022-W51,Influenza,Influenza,total,detections,total,2.0
+primary care sentinel,Malta,2022-W50,Influenza,Influenza,total,detections,total,2.0
+primary care sentinel,Malta,2022-W49,Influenza,Influenza,total,detections,total,1.0
+primary care sentinel,Malta,2022-W47,Influenza,Influenza,total,detections,total,2.0
+primary care sentinel,Malta,2022-W46,Influenza,Influenza,total,detections,total,1.0
+primary care sentinel,Malta,2022-W45,Influenza,Influenza,total,detections,total,2.0
+primary care sentinel,Malta,2022-W43,Influenza,Influenza,total,detections,total,3.0
