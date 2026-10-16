@@ -120,6 +120,221 @@ def alert(
     typer.echo(json.dumps(alerts.summarise(alerts.detect(g, method, baseline)), indent=2))
 
 
+series_app = typer.Typer(no_args_is_help=True, help="Manage stored series (needs --db).")
+derive_app = typer.Typer(no_args_is_help=True, help="Derived (composite) series.")
+app.add_typer(series_app, name="series")
+app.add_typer(derive_app, name="derive")
+DB_REQ = typer.Option(..., "--db", envvar="AILAB_DB", help="DuckDB file.")
+
+
+def _fail(exc: Exception) -> typer.Exit:
+    typer.secho(f"error: {type(exc).__name__}: {exc}", fg="red", err=True)
+    return typer.Exit(2)
+
+
+def _db(db: Path):
+    return _store(db, demo=False)
+
+
+@series_app.command("add")
+def series_add(
+    series_id: str,
+    file: Path = typer.Argument(..., exists=True, dir_okay=False, help="CSV with a date + value."),
+    name: str = typer.Option(..., "--name"),
+    kind: str = typer.Option(..., "--kind", help="count | proportion | rate | event"),
+    db: Path = DB_REQ,
+    ds_col: str = typer.Option("ds", help="Date column (week start)."),
+    y_col: str = typer.Option("y", help="Value column; empty cells = missing."),
+    value_scale: int = typer.Option(1, help="Proportions: 1 (fractions) or 100 (percent)."),
+    season_length: int = typer.Option(52, min=2, max=60),
+    disease: str = typer.Option(""),
+    geography: str = typer.Option(""),
+    unit: str = typer.Option(""),
+):
+    """Import a base series from CSV (kind is required; values are validated against it)."""
+    import pandas as pd
+
+    from .schema import SeriesMeta
+
+    try:
+        df = pd.read_csv(file).rename(columns={ds_col: "ds", y_col: "y"})
+        meta = SeriesMeta(
+            series_id=series_id,
+            name=name,
+            indicator_type=kind,
+            value_scale=value_scale,
+            season_length=season_length,
+            disease=disease,
+            geography=geography,
+            unit=unit,
+        )
+        n = _db(db).upsert_series(meta, df[["ds", "y"]])
+    except (ValueError, KeyError) as exc:
+        raise _fail(exc) from None
+    typer.echo(f"stored {series_id} ({kind}): {n} observations")
+
+
+@series_app.command("list")
+def series_list(
+    db: Path = DB_REQ,
+    limit: int = typer.Option(50, min=1, max=200),
+    offset: int = typer.Option(0, min=0),
+    kind: str | None = typer.Option(None, help="Filter by indicator_type."),
+    derived: bool | None = typer.Option(None, "--derived/--base"),
+):
+    """List series with kind and lineage flag."""
+    items, total = _db(db).page_series(limit, offset, kind, derived)
+    for m in items:
+        typer.echo(
+            f"{m.series_id}\t{m.indicator_type}\t{'derived' if m.is_derived else 'base'}\t{m.name}"
+        )
+    typer.echo(f"# {len(items)} of {total}", err=True)
+
+
+@series_app.command("show")
+def series_show(series_id: str, db: Path = DB_REQ):
+    """Metadata and lineage as JSON."""
+    try:
+        typer.echo(_db(db).get_meta(series_id).model_dump_json(indent=2))
+    except KeyError as exc:
+        raise _fail(exc) from None
+
+
+@series_app.command("data")
+def series_data(
+    series_id: str,
+    db: Path = DB_REQ,
+    limit: int = typer.Option(20, min=1, max=5000),
+    offset: int = typer.Option(0, min=0),
+    csv_out: Path | None = typer.Option(None, "--csv", help="Write the whole series to CSV."),
+):
+    """Print observations (missing shown as empty) or write them all to CSV."""
+    store = _db(db)
+    try:
+        df = store.get_observations(series_id, limit=None if csv_out else limit, offset=offset)
+    except KeyError as exc:
+        raise _fail(exc) from None
+    if csv_out:
+        df.rename(columns={"ds": "period_start", "y": "value"}).to_csv(csv_out, index=False)
+        typer.echo(f"wrote {len(df)} rows -> {csv_out}")
+    else:
+        typer.echo(df.to_csv(index=False, date_format="%Y-%m-%d"))
+
+
+@series_app.command("delete")
+def series_delete(
+    series_id: str,
+    db: Path = DB_REQ,
+    cascade: bool = typer.Option(False, help="Also delete derived series built from it."),
+    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation."),
+):
+    """Delete a series (refuses if derived series depend on it, unless --cascade)."""
+    from .store import DependencyError
+
+    if not yes:
+        typer.confirm(f"Delete {series_id}?", abort=True)
+    try:
+        ids = _db(db).delete_series(series_id, cascade=cascade)
+    except (KeyError, DependencyError) as exc:
+        raise _fail(exc) from None
+    typer.echo("deleted: " + ", ".join(ids))
+
+
+def _bindings(bind: list[str] | None) -> dict[str, str]:
+    out = {}
+    for b in bind or []:
+        a, sep, sid = b.partition("=")
+        if not sep:
+            raise _fail(ValueError(f"--bind must look like ALIAS=series_id, got {b!r}"))
+        out[a] = sid
+    return out
+
+
+@derive_app.command("preview")
+def derive_preview(
+    expr: str,
+    db: Path = DB_REQ,
+    bind: list[str] | None = typer.Option(None, "--bind", help="ALIAS=series_id (repeatable)."),
+    align: str = typer.Option("intersection", help="intersection | union"),
+):
+    """Dry run: inferred kind, alignment report and warnings (nothing is stored)."""
+    from . import derive_service
+
+    try:
+        d = derive_service.plan(_db(db), "preview", "preview", expr, _bindings(bind), align)
+    except (ValueError, KeyError) as exc:
+        raise _fail(exc) from None
+    typer.echo(
+        json.dumps(
+            {
+                "indicator_type": d.meta.indicator_type,
+                "value_scale": d.meta.value_scale,
+                "observations": len(d.data),
+                "warnings": d.warnings,
+                "lineage": d.meta.lineage,
+            },
+            indent=2,
+        )
+    )
+
+
+@derive_app.command("create")
+def derive_create(
+    series_id: str,
+    expr: str,
+    db: Path = DB_REQ,
+    name: str = typer.Option(..., "--name"),
+    bind: list[str] | None = typer.Option(None, "--bind", help="ALIAS=series_id (repeatable)."),
+    align: str = typer.Option("intersection", help="intersection | union"),
+    kind: str | None = typer.Option(None, help="Assert the inferred kind (optional)."),
+    overwrite: bool = typer.Option(False),
+):
+    """Create a derived series, e.g.  ailab derive create pos_rate "pos / tests" --name ..."""
+    from . import derive_service
+
+    try:
+        d = derive_service.create_derived(
+            _db(db), series_id, name, expr, _bindings(bind), align, kind, overwrite
+        )
+    except (ValueError, KeyError) as exc:
+        raise _fail(exc) from None
+    typer.echo(
+        f"stored {series_id}: kind={d.meta.indicator_type} from {d.meta.derived_from} "
+        f"({len(d.data)} weeks)"
+    )
+    for w in d.warnings:
+        typer.secho(f"warning: {w}", fg="yellow", err=True)
+
+
+@derive_app.command("recompute")
+def derive_recompute(series_id: str, db: Path = DB_REQ):
+    """Re-evaluate a derived series from the current data of its sources."""
+    from . import derive_service
+
+    try:
+        d = derive_service.recompute(_db(db), series_id)
+    except (ValueError, KeyError) as exc:
+        raise _fail(exc) from None
+    typer.echo(f"recomputed {series_id}: {len(d.data)} weeks, kind={d.meta.indicator_type}")
+
+
+@app.command()
+def synth(
+    out: Path = typer.Option(Path("synthetic.csv"), help="CSV output (ds,y)."),
+    kind: str = typer.Option("count", help="count | proportion"),
+    weeks: int = typer.Option(312, min=10, max=5200),
+    seed: int = typer.Option(0),
+    season_length: int = typer.Option(52, min=2, max=60),
+    missing_frac: float = typer.Option(0.0, min=0.0, max=0.5),
+):
+    """Write a deterministic synthetic weekly series (dev/testing; seeded)."""
+    from .synth import synth_series
+
+    df = synth_series(weeks, kind, seed, season_length=season_length, missing_frac=missing_frac)
+    df.to_csv(out, index=False)
+    typer.echo(f"wrote {len(df)} weeks ({kind}, seed={seed}) -> {out}")
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", help="Use 0.0.0.0 inside containers."),
@@ -128,12 +343,24 @@ def serve(
     preload_demo: bool = typer.Option(False, "--preload-demo", envvar="AILAB_PRELOAD_DEMO"),
 ):
     """Run the service API (FastAPI): /health, /docs, /api/v1/..."""
+    import logging
+    import os
+
     import uvicorn
 
     from .api.app import create_app
 
+    logging.basicConfig(
+        level=os.environ.get("AILAB_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     uvicorn.run(
-        create_app(db_path=db, preload_demo=preload_demo), host=host, port=port, log_level="info"
+        create_app(db_path=db, preload_demo=preload_demo or None),
+        host=host,
+        port=port,
+        log_level="info",
+        server_header=False,
+        access_log=False,  # ailab.api logs one line per request (path only, no query string)
     )
 
 
@@ -143,7 +370,7 @@ def doctor():
     import importlib
 
     ok = True
-    for mod in ("duckdb", "pandas", "numpy", "statsforecast", "fastapi", "pyarrow"):
+    for mod in ("duckdb", "pandas", "numpy", "statsforecast", "fastapi", "pyarrow", "simpleeval"):
         try:
             m = importlib.import_module(mod)
             typer.echo(f"ok   {mod} {getattr(m, '__version__', '?')}")
