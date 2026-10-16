@@ -9,10 +9,10 @@ test:            ## fast unit + API tests (TestClient), ~20 s
 	uv run pytest
 
 lint:
-	uv run ruff check src tests scripts && uv run ruff format --check src tests scripts
+	uv run ruff check src tests scripts benchmarks && uv run ruff format --check src tests scripts benchmarks
 
 fmt:
-	uv run ruff check --fix src tests scripts && uv run ruff format src tests scripts
+	uv run ruff check --fix src tests scripts benchmarks && uv run ruff format src tests scripts benchmarks
 
 e2e:             ## black-box API tests against a real `ailab serve` subprocess (~1-2 min)
 	AILAB_E2E_TARGET=local uv run pytest tests/e2e -m "e2e" -p no:cacheprovider

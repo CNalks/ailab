@@ -16,11 +16,6 @@ REASONS: dict[str, dict[str, str]] = {
         "fr": "Le type d'indicateur « event » (événements rares à déclaration obligatoire) est "
         "surveillé mais pas prévu.",
     },
-    "kind_proportion_disabled": {
-        "en": "Forecasting of proportions is switched off for this deployment.",
-        "zh": "本部署已关闭比例型指标的预测。",
-        "fr": "La prévision des proportions est désactivée pour ce déploiement.",
-    },
     "negative_values": {
         "en": "The series contains negative values, which is invalid for this indicator type.",
         "zh": "序列含有负值，对该指标类型无效。",

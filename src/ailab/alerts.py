@@ -69,6 +69,8 @@ def farrington_scores(
     the ``1 - Phi(z)`` upper prediction limit. Weeks with fewer than ``min_years`` reference seasons
     are NaN. Returns (score, expected).
     """
+    import warnings
+
     import statsmodels.api as sm
 
     n = len(y)
@@ -93,13 +95,22 @@ def farrington_scores(
         X = np.column_stack([np.ones(len(idx)), tt]) if trend else np.ones((len(idx), 1))
         wts = np.ones(len(idx))
         try:
-            for _ in range(2):
-                fit = sm.GLM(yy, X, family=sm.families.Poisson(), var_weights=wts).fit(scale="x2")
-                r = (yy - fit.mu) / np.sqrt(np.maximum(fit.mu, 1e-9) * max(fit.scale, 1.0))
-                wts = np.where(np.abs(r) > 2.58, (2.58 / np.maximum(np.abs(r), 1e-9)) ** 2, 1.0)
+            with warnings.catch_warnings(), np.errstate(all="ignore"):
+                warnings.simplefilter("ignore")
+                for _ in range(2):
+                    fit = sm.GLM(yy, X, family=sm.families.Poisson(), var_weights=wts).fit(
+                        scale="x2"
+                    )
+                    r0 = (yy - fit.mu) / np.sqrt(np.maximum(fit.mu, 1e-9))
+                    # robust dispersion for the weights: a past outbreak must not inflate the
+                    # scale that is used to detect it
+                    phi_r = max(1.0, (1.4826 * np.median(np.abs(r0 - np.median(r0)))) ** 2)
+                    r = r0 / math.sqrt(phi_r)
+                    wts = np.where(np.abs(r) > 2.58, (2.58 / np.maximum(np.abs(r), 1e-9)) ** 2, 1.0)
             x0 = np.array([1.0, 0.0]) if trend else np.array([1.0])
             eta = float(x0 @ fit.params)
-            var_eta = float(x0 @ fit.cov_params() @ x0)
+            with np.errstate(all="ignore"):
+                var_eta = float(x0 @ fit.cov_params() @ x0)
         except Exception:  # singular design / non-convergence: no score for this week
             continue
         mu = math.exp(eta)

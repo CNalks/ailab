@@ -30,7 +30,9 @@ D = 8
 EVAL_FROM = 156
 
 
-def make(seed: int, level: float, amp: float, variant: str = "base") -> tuple[pd.DataFrame, list[int]]:
+def make(
+    seed: int, level: float, amp: float, variant: str = "base"
+) -> tuple[pd.DataFrame, list[int]]:
     from ailab.synth import _seasonal
 
     rng = np.random.default_rng(seed * 1000 + int(level))
@@ -47,7 +49,7 @@ def make(seed: int, level: float, amp: float, variant: str = "base") -> tuple[pd
         ev.append(t)
         t += int(rng.integers(30, 45))
     y_mu = mu.copy()
-    for i, t0 in enumerate(onsets + ev):
+    for t0 in onsets + ev:
         a = 2.0 if t0 < EVAL_FROM else amp
         for w in range(D):
             y_mu[t0 + w] *= 1 + a * np.sin(np.pi * (w + 1) / (D + 1))
@@ -85,7 +87,9 @@ def _job(args):
         if m == "cusum":
             for thr in THR[m]:
                 r = alerts.detect(df, m, c["baseline"], float(thr))
-                res[(name, float(thr))] = _score(r["alarm"].to_numpy(), r["score"].to_numpy(), ev, mask_out)
+                res[(name, float(thr))] = _score(
+                    r["alarm"].to_numpy(), r["score"].to_numpy(), ev, mask_out
+                )
         else:
             r = alerts.detect(df, m, c["baseline"], 1e9)
             sc = r["score"].to_numpy()
@@ -107,7 +111,13 @@ def _score(alarm, score, ev, mask_out):
         if w.any():
             det += 1
             lat.append(int(np.argmax(w)))
-    return {"n_clean": n_clean, "false_alarms": fa, "detected": det, "n_outbreaks": len(ev), "lat": lat}
+    return {
+        "n_clean": n_clean,
+        "false_alarms": fa,
+        "detected": det,
+        "n_outbreaks": len(ev),
+        "lat": lat,
+    }
 
 
 def main():
@@ -123,9 +133,13 @@ def main():
     with ProcessPoolExecutor(a.workers) as ex:
         out = list(ex.map(_job, jobs))
     agg: dict = {}
-    for seed, level, amp, _v, res in out:
+    for _seed, level, amp, _v, res in out:
         for (name, thr), r in res.items():
-            d = agg.setdefault(name, {}).setdefault(str(thr), {}).setdefault(f"L{int(level)}_A{amp}", [])
+            d = (
+                agg.setdefault(name, {})
+                .setdefault(str(thr), {})
+                .setdefault(f"L{int(level)}_A{amp}", [])
+            )
             d.append(r)
     # reduce
     red = {}
@@ -143,7 +157,9 @@ def main():
                 }
             red[name][thr] = cell
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(json.dumps({"results": red, "seeds": len(list(seeds)), "variant": a.variant}))
+    Path(a.out).write_text(
+        json.dumps({"results": red, "seeds": len(list(seeds)), "variant": a.variant})
+    )
     print(f"done in {time.time() - t0:.0f}s -> {a.out}")
 
 

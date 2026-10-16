@@ -75,7 +75,12 @@ def scenarios(quick: bool) -> list[dict]:
     for sd in seeds:
         out.append(dict(name="seasonal", seed=sd, kind="count", df=synth_series(n, "count", sd)))
         out.append(
-            dict(name="seasonal_trend", seed=sd, kind="count", df=synth_series(n, "count", sd, trend=2.0))
+            dict(
+                name="seasonal_trend",
+                seed=sd,
+                kind="count",
+                df=synth_series(n, "count", sd, trend=2.0),
+            )
         )
         out.append(
             dict(
@@ -86,7 +91,12 @@ def scenarios(quick: bool) -> list[dict]:
             )
         )
         out.append(
-            dict(name="seasonal_prop", seed=sd, kind="proportion", df=synth_series(n, "proportion", sd))
+            dict(
+                name="seasonal_prop",
+                seed=sd,
+                kind="proportion",
+                df=synth_series(n, "proportion", sd),
+            )
         )
         out.append(
             dict(
@@ -101,7 +111,9 @@ def scenarios(quick: bool) -> list[dict]:
         idx = rng.choice(np.arange(60, n - 10), 16, replace=False)
         y = df["y"].to_numpy().copy()
         y[idx] *= rng.choice([5.0, 0.05], 16)
-        out.append(dict(name="seasonal_outliers", seed=sd, kind="count", df=df.assign(y=np.round(y))))
+        out.append(
+            dict(name="seasonal_outliers", seed=sd, kind="count", df=df.assign(y=np.round(y)))
+        )
         df = synth_series(n, "count", sd)
         y = df["y"].to_numpy().copy()
         y[200:262] = np.round(y[200:262] * 0.05)  # COVID-like suppression (~1 year)
@@ -125,8 +137,27 @@ def scenarios(quick: bool) -> list[dict]:
     out.append(dict(name="real_num_ili", seed=0, kind="count", df=c))
     cut = pd.Timestamp("2023-09-24")  # test origins span the COVID period
     mask = [["2020-03-15", "2021-09-26"]]
-    out.append(dict(name="real_wili_covid", seed=0, kind="proportion", scale=100, df=w[w.ds <= cut], mask=mask, origin_min=300))
-    out.append(dict(name="real_num_ili_covid", seed=0, kind="count", df=c[c.ds <= cut], mask=mask, origin_min=300))
+    out.append(
+        dict(
+            name="real_wili_covid",
+            seed=0,
+            kind="proportion",
+            scale=100,
+            df=w[w.ds <= cut],
+            mask=mask,
+            origin_min=300,
+        )
+    )
+    out.append(
+        dict(
+            name="real_num_ili_covid",
+            seed=0,
+            kind="count",
+            df=c[c.ds <= cut],
+            mask=mask,
+            origin_min=300,
+        )
+    )
     return out
 
 
@@ -171,7 +202,7 @@ def run_one(sc: dict, n_windows: int, masked: bool = False) -> dict:
     # score only non-disrupted targets (same set for masked and unmasked variants)
     dis = np.zeros(len(truth_raw), bool)
     for a, b in sc.get("mask", []):
-        dis |= ((truth_raw.index >= a) & (truth_raw.index <= b))
+        dis |= (truth_raw.index >= a) & (truth_raw.index <= b)
     bad = set(truth_raw.index[dis])
     cv = cv[~cv["ds"].isin(bad)].reset_index(drop=True)
     return {"cv": cv, "tf": tf, "seconds": time.time() - t0}
@@ -228,7 +259,6 @@ def _interval_scores(cal, test, m, tf, variant):
                 run = max(run, widths[(h, lv)][1])
                 widths[(h, lv)] = (-run, run)
     cover = {lv: [] for lv in LEVELS}
-    wis_parts = []
     y_obs = test["y_obs"].to_numpy()
     zhat = test[m].to_numpy()
     hh = test["h"].to_numpy().astype(int)
@@ -275,7 +305,9 @@ def main():
         for n, s, mk, m, sec in res
     ]
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(json.dumps({"rows": rows, "n_windows": nw, "h": H, "step": STEP}, indent=1))
+    Path(a.out).write_text(
+        json.dumps({"rows": rows, "n_windows": nw, "h": H, "step": STEP}, indent=1)
+    )
     print(f"done: {len(rows)} runs in {time.time() - t0:.0f}s -> {a.out}")
 
 

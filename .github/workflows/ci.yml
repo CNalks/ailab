@@ -15,8 +15,8 @@ jobs:
           version: "0.13.0"
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run ruff check src tests scripts
-      - run: uv run ruff format --check src tests scripts
+      - run: uv run ruff check src tests scripts benchmarks
+      - run: uv run ruff format --check src tests scripts benchmarks
       - run: uv run pytest
       - name: Demo end to end (offline fixture)
         run: uv run ailab demo --out out && test -s out/manifest.json

@@ -40,7 +40,9 @@ def md(by, fmt="{:.2f}", agg=gmean, models=None):
     for k, d in by.items():
         lines.append("| " + k + " | " + " | ".join(fmt.format(agg(d[m])) for m in models) + " |")
     allv = {m: [x for d in by.values() for x in d[m]] for m in models}
-    lines.append("| **all** | " + " | ".join("**" + fmt.format(agg(allv[m])) + "**" for m in models) + " |")
+    lines.append(
+        "| **all** | " + " | ".join("**" + fmt.format(agg(allv[m])) + "**" for m in models) + " |"
+    )
     return "\n".join(lines)
 
 
@@ -51,25 +53,46 @@ print("\n### relative WIS vs SeasonalNaive (abs-error conformal, out-of-sample)\
 print(md(table(no_mask, "rel_wis")))
 for v in ("abs", "abs_mono", "signed", "abs_recent"):
     print(f"\n### out-of-sample 80% / 95% coverage, interval variant `{v}` (mean over series)\n")
-    c80 = md(table(no_mask, "cov80", variant=v), "{:.2f}", np.mean, ["MSTL", "AutoTheta", "ENS_mstl_theta", "ENS_mstl_theta_swa"])
-    c95 = md(table(no_mask, "cov95", variant=v), "{:.2f}", np.mean, ["MSTL", "AutoTheta", "ENS_mstl_theta", "ENS_mstl_theta_swa"])
+    c80 = md(
+        table(no_mask, "cov80", variant=v),
+        "{:.2f}",
+        np.mean,
+        ["MSTL", "AutoTheta", "ENS_mstl_theta", "ENS_mstl_theta_swa"],
+    )
+    c95 = md(
+        table(no_mask, "cov95", variant=v),
+        "{:.2f}",
+        np.mean,
+        ["MSTL", "AutoTheta", "ENS_mstl_theta", "ENS_mstl_theta_swa"],
+    )
     print("80%:\n" + c80 + "\n\n95%:\n" + c95)
 print("\n### mask option: relative MAE on non-disrupted targets (same targets with/without mask)\n")
 by = defaultdict(lambda: defaultdict(list))
 for r in rows:
-    if r["scenario"].startswith(("covid", "real_wili_covid", "real_num_ili_covid")) and r["metrics"]:
+    if (
+        r["scenario"].startswith(("covid", "real_wili_covid", "real_num_ili_covid"))
+        and r["metrics"]
+    ):
         key = r["scenario"] + ("+mask" if r["masked"] else "")
         for m in ("SeasonalNaive", "MSTL", "AutoTheta", "ENS_mstl_theta", "SWA3"):
             by[key][m].append(r["metrics"][m]["mae"])
 print(md(by, "{:.3f}", np.mean, ["SeasonalNaive", "SWA3", "MSTL", "AutoTheta", "ENS_mstl_theta"]))
 
-print("\n### model selection on the calibration part, scored on the held-out part (rel MAE vs SeasonalNaive)\n")
+print(
+    "\n### model selection on the calibration part, scored on the held-out part (rel MAE vs SeasonalNaive)\n"
+)
 STRATS = {
     "fixed MSTL": None,
     "select {MSTL,Theta,Naive} (v0.2 rule)": ["MSTL", "AutoTheta", "Naive"],
     "select {MSTL,Theta,Naive,SWA3}": ["MSTL", "AutoTheta", "Naive", "SWA3"],
     "select {MSTL,Theta,Naive,ENS_mstl_theta}": ["MSTL", "AutoTheta", "Naive", "ENS_mstl_theta"],
-    "select {MSTL,Theta,Naive,SWA3,ENS_mstl_theta_swa}": ["MSTL", "AutoTheta", "Naive", "SWA3", "ENS_mstl_theta_swa"],
+    "select {MSTL,Theta,Naive,SWA3,ENS_mstl_theta_swa}": [
+        "MSTL",
+        "AutoTheta",
+        "Naive",
+        "SWA3",
+        "ENS_mstl_theta_swa",
+    ],
     "fixed ENS_mstl_theta": "ENS_mstl_theta",
 }
 by = defaultdict(lambda: defaultdict(list))

@@ -78,8 +78,8 @@ class Thresholds:
     drift_warn: float = 0.5  # |last season mean - first season mean| of the deseasonalised series
     # --- structural break / variance ---------------------------------------------------------
     break_min_shift: float = 0.5  # model units (log / logit): ~65 % level change
-    break_min_sup_t: float = 10.0  # HAC t of the step dummy (detrended scan)
-    break_recent_seasons: float = 1.5  # break inside the last N seasons => limit, else warn
+    break_min_sup_t: float = 8.0  # HAC t of the step dummy (detrended scan)
+    break_recent_seasons: float = 2.0  # break inside the last N seasons => limit, else warn
     var_ratio_warn: float = 2.5
     var_ratio_limit: float = 5.0
     # --- outliers ----------------------------------------------------------------------------
@@ -270,7 +270,6 @@ def validate_series_overrides(d: dict) -> dict:
 # reason code -> (default recommended action, group)
 ACTION_FOR = {
     "kind_event_not_forecast": "monitor_only",
-    "kind_proportion_disabled": "monitor_only",
     "negative_values": "review_series_definition",
     "too_short": "collect_more_history",
     "short_history": "collect_more_history",
@@ -305,7 +304,6 @@ ACTION_FOR = {
 # legacy policy.reason / display_mode for each blocking code
 LEGACY_REASON = {
     "kind_event_not_forecast": ("indicator_type_event_sparse", "monitor_only"),
-    "kind_proportion_disabled": ("indicator_type_proportion_monitor_only", "monitor_only"),
     "too_short": ("history_lt_3_seasons", "monitor_only"),
     "mostly_zeros": ("sparse_series", "monitor_only"),
     "too_many_gaps": ("data_gaps_too_long", "history_only"),
@@ -322,7 +320,6 @@ LEGACY_REASON = {
 # pre-0.3 decision order)
 BLOCK_PRIORITY = (
     "kind_event_not_forecast",
-    "kind_proportion_disabled",
     "too_short",
     "mostly_zeros",
     "too_many_gaps",

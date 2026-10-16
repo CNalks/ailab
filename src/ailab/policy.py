@@ -158,8 +158,11 @@ def apply_gate(
     codes = [r.code for r in gate.reasons]
     upd = {"gate_decision": gate.decision, "reason_codes": codes, "limited": False}
     if gate.refused:
-        if policy.forecast_allowed:
-            blk = gate.first_block
+        blk = gate.first_block
+        # the backtest is skipped when a data check refuses: "backtest_not_possible" is then only
+        # an artefact, the gate's own (data) reason is the real one
+        artefact = policy.reason == "backtest_not_possible" and blk.code != "insufficient_backtest"
+        if policy.forecast_allowed or artefact:
             reason, mode = gate_mod.LEGACY_REASON.get(blk.code, (blk.code, "monitor_only"))
             return policy.model_copy(
                 update={
