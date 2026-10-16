@@ -80,6 +80,7 @@ def rolling_origin_backtest(
     n_windows: int = 26,
     step: int = 2,
     transform: Transform | None = None,
+    score_mask: np.ndarray | None = None,
 ) -> Backtest | None:
     """``g`` must be a regular weekly frame without NaN. Returns None if too short.
 
@@ -97,6 +98,11 @@ def rolling_origin_backtest(
     )
     cv_z = cv_z.reset_index() if "unique_id" not in cv_z.columns else cv_z
     cv_z["h"] = ((cv_z["ds"] - cv_z["cutoff"]).dt.days // 7).astype(int)
+    if score_mask is not None and score_mask.any():
+        masked_ds = set(g["ds"][np.asarray(score_mask, dtype=bool)])
+        cv_z = cv_z[~cv_z["ds"].isin(masked_ds)].reset_index(drop=True)
+        if cv_z["cutoff"].nunique() < 5:
+            return None
     cv = cv_z.copy()
     for col in ("y", BASELINE, *CANDIDATES):
         cv[col] = tf.inverse(cv_z[col].to_numpy())
@@ -135,9 +141,9 @@ def rolling_origin_backtest(
     )
 
 
-def choose_model(bt: Backtest) -> tuple[str, int]:
+def choose_model(bt: Backtest, candidates: tuple[str, ...] = CANDIDATES) -> tuple[str, int]:
     """Best candidate by overall MAE and the number of leading horizons where it beats baseline."""
-    best = min(CANDIDATES, key=lambda m: bt.metrics[m]["mae"])
+    best = min(candidates, key=lambda m: bt.metrics[m]["mae"])
     flags = bt.metrics[best]["beats_baseline_by_horizon"]
     h_ok = 0
     for h in range(1, bt.horizon + 1):
@@ -186,6 +192,14 @@ def interval_widths(bt: Backtest, model: str) -> dict:
         "n_windows": bt.n_windows,
         "finite_sample_valid": exact,
     }
+
+
+def inflate(widths: dict, factor: float) -> dict:
+    """Scale all half-widths (transformed space) by ``factor`` (used by limited mode)."""
+    if factor == 1.0:
+        return widths
+    hw = {h: {lv: w * factor for lv, w in d.items()} for h, d in widths["half_widths"].items()}
+    return {**widths, "half_widths": hw, "inflation": factor}
 
 
 def forecast_point(

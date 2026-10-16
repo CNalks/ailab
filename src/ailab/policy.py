@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import gate as gate_mod
 from .forecast import FAMILY, Backtest, choose_model
 from .schema import ForecastPolicy, IndicatorType
 
@@ -42,6 +43,18 @@ KIND_RULES: dict[str, KindRule] = {
 }
 
 
+def rule_from_thresholds(th: gate_mod.Thresholds) -> KindRule:
+    """The legacy per-kind rule expressed with the (possibly overridden) gate thresholds."""
+    deny_cov = th.cov80_block > 0
+    return KindRule(
+        th.min_horizons_ok,
+        th.max_rel_mae,
+        th.cov80_block if deny_cov else th.cov80_limit,
+        deny_cov,
+        th.backtest_seasons_block > 0,
+    )
+
+
 def decide(
     indicator_type: IndicatorType,
     quality: dict,
@@ -49,8 +62,14 @@ def decide(
     calibration: dict | None,
     requested_horizon: int,
     proportion_forecast: bool = True,
+    rule: KindRule | None = None,
+    force_model: str | None = None,
 ) -> tuple[ForecastPolicy, str | None]:
-    """Returns (policy, chosen_model_name_or_None)."""
+    """Returns (policy, chosen_model_name_or_None).
+
+    ``rule`` replaces the kind's default rule; ``force_model`` (baseline-only mode) skips the
+    skill-vs-baseline checks because no skill is claimed for a baseline model.
+    """
 
     def deny(reason: str, mode: str = "monitor_only") -> tuple[ForecastPolicy, None]:
         return ForecastPolicy(
@@ -77,16 +96,22 @@ def decide(
         return deny("negative_values", "history_only")
     if bt is None:
         return deny("backtest_not_possible")
-    rule = KIND_RULES.get(indicator_type, KIND_RULES["count"])
-    model, h_ok = choose_model(bt)
-    if h_ok == 0:
-        return deny("no_skill_vs_seasonal_naive")
+    rule = rule or KIND_RULES.get(indicator_type, KIND_RULES["count"])
     warnings: list[str] = []
-    rel = bt.metrics[model]["rel_mae_vs_seasonal_naive"]
-    if rel is not None and rel >= rule.max_rel_mae:
-        return deny("no_skill_vs_seasonal_naive")
-    if h_ok < rule.min_horizons_ok:
-        return deny("skill_horizon_too_short")
+    if force_model is not None:
+        model, h_ok = force_model, requested_horizon
+        warnings.append(
+            "baseline-only forecast (limited mode): no skill over the seasonal-naive baseline is claimed"
+        )
+    else:
+        model, h_ok = choose_model(bt)
+        if h_ok == 0:
+            return deny("no_skill_vs_seasonal_naive")
+        rel = bt.metrics[model]["rel_mae_vs_seasonal_naive"]
+        if rel is not None and rel >= rule.max_rel_mae:
+            return deny("no_skill_vs_seasonal_naive")
+        if h_ok < rule.min_horizons_ok:
+            return deny("skill_horizon_too_short")
     cov80 = (calibration or {}).get("80", {}).get("empirical_loo")
     if bt.seasons_covered < MIN_BACKTEST_SEASONS:
         if rule.deny_on_short_backtest:
@@ -117,3 +142,61 @@ def decide(
         indicator_type=indicator_type,
         warnings=warnings,
     ), model
+
+
+def apply_gate(
+    policy: ForecastPolicy, model: str | None, gate: gate_mod.GateDecision, trim_weeks: int = 0
+) -> tuple[ForecastPolicy, str | None]:
+    """Overlay the gate on the (legacy-rule) decision.
+
+    * gate refused, legacy allowed (a check the legacy rules do not know) -> deny with the gate's
+      first blocking reason; legacy denial keeps its (historic) ``reason``;
+    * gate limited -> constrain horizon / band as the gate says; warnings carry the reasons.
+    ``trim_weeks``: provisional weeks excluded from fitting; the forecast starts that many weeks
+    before ``data_through`` so ``horizon_weeks`` counts only weeks after it.
+    """
+    codes = [r.code for r in gate.reasons]
+    upd = {"gate_decision": gate.decision, "reason_codes": codes, "limited": False}
+    if gate.refused:
+        if policy.forecast_allowed:
+            blk = gate.first_block
+            reason, mode = gate_mod.LEGACY_REASON.get(blk.code, (blk.code, "monitor_only"))
+            return policy.model_copy(
+                update={
+                    **upd,
+                    "forecast_allowed": False,
+                    "reason": reason,
+                    "display_mode": mode,
+                    "model_family": "none",
+                    "horizon_weeks": 0,
+                }
+            ), None
+        return policy.model_copy(update=upd), None
+    if not policy.forecast_allowed:  # legacy denied but the gate did not: keep the denial visible
+        return policy.model_copy(update={**upd, "gate_decision": "refused"}), None
+    lim = gate.limits
+    warnings = list(policy.warnings)
+    horizon = policy.horizon_weeks
+    if lim["max_horizon_weeks"]:
+        capped = min(horizon, lim["max_horizon_weeks"] + trim_weeks)
+        if capped < horizon:
+            warnings.append(f"limited mode: horizon capped at {lim['max_horizon_weeks']} weeks")
+        horizon = capped
+    mode = policy.display_mode
+    if lim["point_only"] and mode == "forecast_band":
+        mode = "forecast_point_only"
+    if lim["interval_inflation"] > 1.0:
+        warnings.append(f"limited mode: intervals widened x{lim['interval_inflation']:g}")
+    for r in sorted(gate.reasons, key=lambda r: gate_mod.SEVERITY_ORDER[r.severity]):
+        if r.severity in ("limit", "warn"):
+            warnings.append(f"[{r.code}] " + r.to_dict()["message"]["en"])
+    policy = policy.model_copy(
+        update={
+            **upd,
+            "limited": gate.decision == "limited",
+            "display_mode": mode,
+            "horizon_weeks": max(0, horizon - trim_weeks) if trim_weeks else horizon,
+            "warnings": warnings,
+        }
+    )
+    return policy, model

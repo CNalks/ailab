@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from typing import Literal
 
@@ -42,6 +43,13 @@ class SeriesMeta(BaseModel):
     derived_from: list[str] = Field(default_factory=list)  # source series ids (sorted)
     bindings: dict[str, str] = Field(default_factory=dict)  # alias used in expr -> series id
     lineage: dict | None = None  # kind-inference trail, alignment report, source fingerprints
+    # --- forecast-quality options (v0.3) -----------------------------------------------------
+    # per-series overrides of quality-gate thresholds, e.g. {"min_seasons_block": 4,
+    # "reporting_lag_weeks": 2}; names/units in docs/MODEL_POLICY.md
+    gate: dict = Field(default_factory=dict)
+    # [["2020-03-01", "2021-08-29"], ...]: disruption periods (e.g. COVID-19) that are replaced by
+    # same-week values of other seasons for fitting and excluded from backtest scoring / alerts
+    mask_periods: list[list[str]] = Field(default_factory=list, max_length=20)
 
     @field_validator("name")
     @classmethod
@@ -49,6 +57,32 @@ class SeriesMeta(BaseModel):
         if not v.strip() or len(v) > 200:
             raise ValueError("name must be 1..200 characters")
         return v
+
+    @field_validator("gate")
+    @classmethod
+    def _valid_gate(cls, v: dict) -> dict:
+        from .gate import GateConfigError, validate_series_overrides
+
+        try:
+            return validate_series_overrides(v)
+        except GateConfigError as exc:
+            raise ValueError(str(exc)) from None
+
+    @field_validator("mask_periods")
+    @classmethod
+    def _valid_mask(cls, v: list[list[str]]) -> list[list[str]]:
+        out = []
+        for p in v:
+            if len(p) != 2:
+                raise ValueError("each mask period is [start, end] (YYYY-MM-DD)")
+            try:
+                a, b = dt.date.fromisoformat(p[0]), dt.date.fromisoformat(p[1])
+            except ValueError:
+                raise ValueError("mask period dates must be YYYY-MM-DD") from None
+            if a > b:
+                raise ValueError("mask period start must be <= end")
+            out.append([a.isoformat(), b.isoformat()])
+        return out
 
     @property
     def is_derived(self) -> bool:
@@ -72,6 +106,10 @@ class ForecastPolicy(BaseModel):
     horizon_weeks: int = Field(ge=0)
     indicator_type: IndicatorType
     warnings: list[str] = Field(default_factory=list)
+    # --- added in 0.3 (quality gate); older clients simply ignore them -------------------------
+    gate_decision: Literal["allowed", "limited", "refused"] = "allowed"
+    reason_codes: list[str] = Field(default_factory=list)  # machine-readable gate reasons
+    limited: bool = False  # True: forecast_allowed but constrained (see gate.limits)
 
 
 class AlertRule(BaseModel):
