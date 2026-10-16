@@ -239,6 +239,11 @@ def create_app(
             {"dependents": exc.dependents},
         )
 
+    @app.exception_handler(KeyError)
+    async def _key_exc(request: Request, exc: KeyError):
+        # a series/rule vanished between the existence check and the read (concurrent delete)
+        return _err(request, 404, "not_found", "unknown series (it may have just been deleted)")
+
     @app.exception_handler(BudgetError)
     async def _budget_exc(request: Request, exc: BudgetError):
         return _err(request, 422, "export_budget_exceeded", str(exc))

@@ -67,3 +67,23 @@ def test_parallel_create_same_id_is_atomic():
     [t.start() for t in ts]
     [t.join() for t in ts]
     assert collections.Counter(out) == {201: 1, 409: n - 1}, out
+
+
+def test_series_deleted_between_check_and_read_is_404_not_500(monkeypatch):
+    """Concurrent DELETE + GET used to surface a KeyError as HTTP 500."""
+    c = TestClient(create_app(settings=Settings(api_key=KEY)), raise_server_exceptions=False)
+    body = {
+        "meta": {"series_id": "gone", "name": "n", "indicator_type": "count"},
+        "observations": [{"ds": "2020-01-05", "y": 1.0}, {"ds": "2020-01-12", "y": 2.0}],
+    }
+    assert c.post("/api/v1/series", json=body, headers={"X-API-Key": KEY}).status_code == 201
+    store = c.app.state.store
+    real = store.get_observations
+
+    def vanish(*a, **k):
+        store.delete_series("gone")
+        return real(*a, **k)
+
+    monkeypatch.setattr(store, "get_observations", vanish)
+    r = c.get("/api/v1/series/gone/data")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
