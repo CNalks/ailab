@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ailab"
-version = "0.2.1"
+version = "0.3.0"
 description = "Time-series engine for infectious-disease surveillance: store, derive, honest forecasts with policy metadata, alerts, static export. Library + CLI + thin service API."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -19,6 +19,8 @@ classifiers = [
 # Runtime dependencies are pinned exactly; uv.lock additionally pins hashes of the full tree.
 dependencies = [
   "statsforecast==2.1.1",
+  "statsmodels==0.15.0",  # gate: STL, ADF/KPSS, HAC; Farrington GLM (already a statsforecast dependency)
+  "scipy==1.18.1",
   "pandas==2.3.3",
   "numpy==2.5.4",
   "duckdb==1.5.6",

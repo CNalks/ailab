@@ -29,7 +29,7 @@ curl -fsS "$AILAB_URL/api/v1/series" | jq -r '.items[] | "\(.series_id)\t\(.indi
 ```
 
 ```
-{"status":"ok","version":"0.2.1","writable":true}
+{"status":"ok","version":"0.3.0","writable":true}
 "ready"
 us_ilinet_ili_visits	count	US national — ILI outpatient visits
 us_ilinet_wili	proportion	US national — Weighted ILI (% of outpatient visits)
@@ -45,12 +45,40 @@ curl -fsS "$AILAB_URL/api/v1/series/us_ilinet_wili/forecast?horizon=4" |
 ```
 
 ```
-{"policy":{"forecast_allowed":true,"reason":"beats_seasonal_naive_in_rolling_origin_backtest","display_mode":"forecast_band","model_family":"mstl_ets","horizon_weeks":4,"indicator_type":"proportion","warnings":[]},"first_point":{"h":1,"ds":"2026-10-04","point":1.89343,"lo80":1.72195,"hi80":2.08163,"lo95":1.67095,"hi95":2.14489},"backtest":{"n_windows":52,"seasons_covered":3.02,"chosen_model":"MSTL"}}
+{"policy":{"forecast_allowed":true,"reason":"beats_seasonal_naive_in_rolling_origin_backtest","display_mode":"forecast_band","model_family":"mstl_ets","horizon_weeks":4,"indicator_type":"proportion","warnings":[],"gate_decision":"allowed","reason_codes":[],"limited":false},"first_point":{"h":1,"ds":"2026-10-04","point":1.89343,"lo80":1.72195,"hi80":2.08163,"lo95":1.67095,"hi95":2.14489},"backtest":{"n_windows":52,"seasons_covered":3.02,"chosen_model":"MSTL"}}
 ```
 
 The first call computes a rolling-origin backtest (a few seconds); identical calls are cached.
 `policy.forecast_allowed=false` means **no numbers are returned**, only the reason (see
 [MODEL_POLICY.md](MODEL_POLICY.md)).
+
+## 2b. The quality gate: a refusal with reasons
+
+Before any number is shown, a quality gate checks the series (length, gaps, constant/zero-inflated, stale,
+breaks, unstable, skill versus the baseline …). A short series is **refused** — with HTTP 200, machine-readable
+reason codes and messages in `en`/`zh`/`fr`:
+
+```bash verify
+auth=(-H "X-API-Key: $AILAB_API_KEY" -H "Content-Type: application/json")
+obs=$(python3 -c 'import json,datetime as d; s=d.date(2025,1,5); print(json.dumps([{"ds":str(s+d.timedelta(weeks=i)),"y":10+(i*7)%9} for i in range(30)]))')
+curl -fsS -X POST "$AILAB_URL/api/v1/series?overwrite=true" "${auth[@]}" \
+  -d "{\"meta\":{\"series_id\":\"tut_short\",\"name\":\"Only 30 weeks\",\"indicator_type\":\"count\"},\"observations\":$obs}" | jq -c .
+curl -fsS "$AILAB_URL/api/v1/series/tut_short/forecast" | jq -c '{policy: (.policy | {forecast_allowed, reason, gate_decision, reason_codes}), forecast}'
+curl -fsS "$AILAB_URL/api/v1/series/tut_short/gate" | jq -c '{decision, reason_codes, message: .reasons[0].message.zh, action: .recommended_action.code}'
+# the good demo series passes; its stage-1 metrics are part of /quality
+curl -fsS "$AILAB_URL/api/v1/series/us_ilinet_wili/quality" | jq -c '{grade, gate: (.gate | {decision, seasonal_strength: .metrics.seasonal_strength})}'
+```
+
+```
+{"series_id":"tut_short","observations":30,"replaced":false,"stale_dependents":[]}
+{"policy":{"forecast_allowed":false,"reason":"history_lt_3_seasons","gate_decision":"refused","reason_codes":["too_short"]},"forecast":null}
+{"decision":"refused","reason_codes":["too_short"],"message":"历史太短：30 个周期 = 0.6 个季节（至少需要 3 个）。","action":"collect_more_history"}
+{"grade":"A","gate":{"decision":"allowed","seasonal_strength":0.80506}}
+```
+
+`decision` is `allowed`, `limited` (shorter horizon / wider intervals / baseline model) or `refused`. Thresholds
+can be overridden per series (`meta.gate`), by environment, or per run in the CLI
+(`ailab gate us_ilinet_wili --set min_seasons_block=4 --lang zh`). Details: [MODEL_POLICY.md](MODEL_POLICY.md#quality-gate-v03).
 
 ## 3. Add your own data (needs the key)
 
@@ -189,7 +217,7 @@ The loaded series are named `ts_*`; remove them with `DELETE /api/v1/series/{id}
 ## 9. Clean up
 
 ```bash verify
-for s in tut_positivity tut_positives tut_tests; do
+for s in tut_positivity tut_positives tut_tests tut_short; do
   curl -fsS -X DELETE "$AILAB_URL/api/v1/series/$s?cascade=true" -H "X-API-Key: $AILAB_API_KEY" | jq -c .
 done
 curl -fsS -X DELETE "$AILAB_URL/api/v1/alerts/rules/tut_rule" -H "X-API-Key: $AILAB_API_KEY" | jq -c .

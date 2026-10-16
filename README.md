@@ -40,7 +40,7 @@ curl -fsS "$AILAB_URL/api/v1/series/us_ilinet_wili/policy" | jq -c '{forecast_al
 ```
 
 ```
-{"status":"ok","version":"0.2.1"}
+{"status":"ok","version":"0.3.0"}
 {"forecast_allowed":true,"reason":"beats_seasonal_naive_in_rolling_origin_backtest","model_family":"mstl_ets","horizon_weeks":8}
 ```
 
@@ -67,8 +67,9 @@ uv run ailab demo --out out            # offline batch: static export of the dem
 | Data-quality checklist → grade A/B/C | [MODEL_POLICY.md](docs/MODEL_POLICY.md#data-quality-grade) |
 | Forecast: SeasonalNaive baseline vs Naive / MSTL-ETS / Theta with a rolling-origin backtest, conformal-style intervals | [METHODS.md](docs/METHODS.md) |
 | **Forecast policy** (when a forecast is allowed, how it is shown) | [MODEL_POLICY.md](docs/MODEL_POLICY.md) |
-| Alert signals: EARS C1/C2/C3, CUSUM, stored rules | [MODEL_POLICY.md](docs/MODEL_POLICY.md#alert-signals) |
-| REST API, 22 operations, OpenAPI | [API.md](docs/API.md), [openapi.json](docs/openapi.json) |
+| **Quality gate (v0.3)**: refuses / limits forecasts of low-quality series (too short, gappy, constant, stale, unstable, no skill vs. baseline …) with machine-readable reason codes and en/zh/fr messages; `GET /series/{id}/gate`, `ailab gate <id>` | [MODEL_POLICY.md](docs/MODEL_POLICY.md#quality-gate-v03), [BENCHMARK.md](docs/BENCHMARK.md) |
+| Alert signals: EARS C1/C2/C3, CUSUM, Farrington-style seasonal alert, alert gate, stored rules | [MODEL_POLICY.md](docs/MODEL_POLICY.md#alert-signals) |
+| REST API, 23 operations, OpenAPI | [API.md](docs/API.md), [openapi.json](docs/openapi.json) |
 | Static export (`manifest.json`, per-series JSON, Parquet) | [EXPORT_FORMAT.md](docs/EXPORT_FORMAT.md) |
 | Reusable synthetic test data + loader | [TESTING.md](docs/TESTING.md) |
 
@@ -100,13 +101,14 @@ alignment report, kind-inference trail). A derived series is a snapshot until `P
 | `horizon_weeks` | how many leading weeks beat the seasonal-naive baseline in the backtest (≤ the requested horizon) |
 | `indicator_type` | kind the rules were applied for |
 | `warnings` | non-fatal caveats (short backtest, truncated horizon, grade B data, history cap …) |
+| `gate_decision`, `reason_codes`, `limited` | (0.3) quality-gate outcome `allowed`/`limited`/`refused` and machine-readable reasons; the full `gate` object is a sibling of `policy` |
 
 A candidate model must beat the **seasonal-naive** baseline in a rolling-origin backtest (default: ≥ 3
 seasons, models refit at every origin using only earlier data). See [MODEL_POLICY.md](docs/MODEL_POLICY.md).
 
 **Alert rules.** EARS C1/C2/C3 (CDC) and a standardised CUSUM compare each week with a baseline of the
 previous weeks (default 7). They are **statistical signals**, not outbreak declarations, carry no
-risk colours, and do not model seasonality (a normal seasonal rise will signal). Use ad-hoc scans
+risk colours, and EARS/CUSUM do not model seasonality (a normal seasonal rise will signal); the Farrington-style alert does and is the default for seasonal counts. Use ad-hoc scans
 (`GET /series/{id}/alerts`) or stored rules (`PUT /alerts/rules`, `GET /alerts/evaluate`).
 
 **Data-quality scoring.** A transparent checklist (length ≥ 3 seasons, completeness, longest gap ≤ 2
@@ -153,7 +155,7 @@ ailab serve [--host --port --db --preload-demo]         # REST service
 ailab demo [--refresh] [--out out]                       # demo series -> static export
 ailab series add|list|show|data|delete --db my.duckdb   # manage base series (kind required)
 ailab derive preview|create|recompute --db my.duckdb    # derived series
-ailab list | check <id> | forecast <id> --h 8 | alert <id> --method ears_c2
+ailab list | check <id> | gate <id> | forecast <id> --h 8 | alert <id> --method ears_c2
 ailab export --db my.duckdb --out out                    # static export of your series
 ailab synth --kind count --weeks 300 --seed 1 --out x.csv    # one deterministic synthetic series
 ailab synth testset --out tests/data/synthetic                # the full API test-data set
@@ -175,7 +177,7 @@ ailab doctor                                              # environment self-che
 - **Counts/rates with a backtest shorter than 3 seasons may still be forecast** (with a warning in
   `policy.warnings`); proportions are denied in that case.
 - **History cap.** Models fit on the last 840 weeks (~16 years) only, to bound compute time.
-- **Alerts ignore seasonality**; expect signals every winter. They flag statistical deviation, not outbreaks.
+- **EARS/CUSUM alerts ignore seasonality**; expect signals every winter (use `farrington`). They flag statistical deviation, not outbreaks.
 - **Weekly data only** (one weekday grid per series, `season_length` 2–60), at most 5200 observations
   per series by default.
 - **Single-node.** Embedded DuckDB allows one server process per database file; analysis is serialised.

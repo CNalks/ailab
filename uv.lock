@@ -20,7 +20,7 @@ wheels = [
 
 [[package]]
 name = "ailab"
-version = "0.2.1"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
@@ -30,8 +30,10 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "scipy" },
     { name = "simpleeval" },
     { name = "statsforecast" },
+    { name = "statsmodels" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
@@ -51,8 +53,10 @@ requires-dist = [
     { name = "pandas", specifier = "==2.3.3" },
     { name = "pyarrow", specifier = "==26.0.0" },
     { name = "pydantic", specifier = "==2.14.1" },
+    { name = "scipy", specifier = "==1.18.1" },
     { name = "simpleeval", specifier = "==1.0.3" },
     { name = "statsforecast", specifier = "==2.1.1" },
+    { name = "statsmodels", specifier = "==0.15.0" },
     { name = "typer", specifier = "==0.27.3" },
     { name = "uvicorn", specifier = "==0.54.0" },
 ]

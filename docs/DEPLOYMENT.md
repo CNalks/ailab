@@ -31,7 +31,7 @@ curl -fsS localhost:8000/ready
   for anything public. The container has a `HEALTHCHECK` on `/health`.
 * Podman: identical flags; `podman build --format docker -t ailab .` (the `HEALTHCHECK` instruction
   needs the docker image format).
-* Pin a version in production: `ghcr.io/cnalks/ailab:v0.2.1` (tags `v*` are published by the
+* Pin a version in production: `ghcr.io/cnalks/ailab:v0.3.0` (tags `v*` are published by the
   `release-image` workflow; `latest` follows the newest tag).
 
 ## docker compose

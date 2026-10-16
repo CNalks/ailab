@@ -38,7 +38,7 @@ curl -fsS "$AILAB_URL/api/v1/series/us_ilinet_wili/policy" | jq -c '{forecast_al
 ```
 
 ```
-{"status":"ok","version":"0.2.1"}
+{"status":"ok","version":"0.3.0"}
 {"forecast_allowed":true,"reason":"beats_seasonal_naive_in_rolling_origin_backtest","model_family":"mstl_ets","horizon_weeks":8}
 ```
 
@@ -77,12 +77,20 @@ uv run ailab demo --out out            # 离线批处理：导出演示序列的
 | `horizon_weeks` | 回测中持续优于季节朴素基线的前若干周（不超过请求的步长） |
 | `indicator_type` | 规则所依据的序列类型 |
 | `warnings` | 非致命提示（回测偏短、步长被截断、数据质量 B 级、历史截断……） |
+| `gate_decision`、`reason_codes`、`limited` | （0.3 新增）质量门控结论 `allowed`/`limited`/`refused` 与机器可读原因码；完整的 `gate` 对象与 `policy` 同级 |
 
 候选模型必须在滚动起点回测（默认覆盖 ≥ 3 个季节，每个起点只用之前的数据重新拟合）中打败**季节朴素**基线。详见
 [MODEL_POLICY.md](docs/MODEL_POLICY.md)。
 
+**质量门控（0.3 新增）。** 在给出任何数字之前，门控先判断“这条序列能不能预测”，并说明原因：历史太短、缺失太多、尾部断更、
+常数/几乎全零、结构突变、方差不稳、离群点、报告延迟、回测不优于季节朴素基线、区间欠覆盖等，每项都有**机器可读原因码**、
+中/英/法三语说明、实测指标与所用阈值、建议动作。结论为 `allowed`、`limited`（缩短步长/加宽区间/只用基线模型）或 `refused`。
+“非平稳/难判断”只在去季节后给**警告**（季节性流行不会被误拒），是否拒绝由回测技能决定。拒绝时 HTTP 仍为 200，`forecast: null`。
+用法：`GET /series/{id}/gate`、`ailab gate <序列>`；阈值可按类型/频率/序列、环境变量或 `meta.gate` 覆盖。
+详见 [MODEL_POLICY.md](docs/MODEL_POLICY.md#quality-gate-v03) 与实测结果 [BENCHMARK.md](docs/BENCHMARK.md)。
+
 **告警规则。** EARS C1/C2/C3（美国 CDC）与标准化 CUSUM，把每周与此前若干周（默认 7 周）的基线比较。它们只是**统计信号**，
-不是“暴发”判定，不带风险颜色，且**不建模季节性**（正常的季节性上升也会触发）。可用即席扫描
+不是“暴发”判定，不带风险颜色，EARS/CUSUM **不建模季节性**（正常的季节性上升也会触发）；0.3 新增的 Farrington 风格告警（`method=farrington`）建模季节性，是季节性计数序列的默认告警之一（实测：约 1 次误报/100 个干净周，EARS C2 约 8 次）。告警也有自己的门控与置信度。可用即席扫描
 （`GET /series/{id}/alerts`）或保存规则（`PUT /alerts/rules`、`GET /alerts/evaluate`）。
 
 **数据质量评分。** 透明的检查清单（长度 ≥ 3 个季节、完整度、最长缺口 ≤ 2 周、非零占比 ≥ 50%、连续零、负值）→ 等级
@@ -122,7 +130,7 @@ ailab serve [--host --port --db --preload-demo]         # REST 服务
 ailab demo [--refresh] [--out out]                       # 演示序列 → 静态导出
 ailab series add|list|show|data|delete --db my.duckdb   # 管理基础序列（必须给出类型）
 ailab derive preview|create|recompute --db my.duckdb    # 派生序列
-ailab list | check <id> | forecast <id> --h 8 | alert <id> --method ears_c2
+ailab list | check <id> | gate <id> | forecast <id> --h 8 | alert <id> --method ears_c2
 ailab export --db my.duckdb --out out                    # 导出自己的序列
 ailab synth --kind count --weeks 300 --seed 1 --out x.csv    # 单个确定性合成序列
 ailab synth testset --out tests/data/synthetic                # 完整的 API 测试数据集
@@ -139,7 +147,7 @@ ailab doctor                                              # 环境自检
 - **区间是边际的。** 回测误差的经验分位数混合了高峰与淡季；虽做了留一窗口的覆盖率检验，但不保证任一具体季节的覆盖。区间仅供参考。
 - **计数/比率类即使回测不足 3 个季节也可能被预测**（`policy.warnings` 会提示）；比例类此时会被拒绝。
 - **历史截断。** 为限制计算时间，模型只拟合最近 840 周（约 16 年）。
-- **告警不考虑季节性**，每年冬季出现信号属正常；它们只表示统计偏离，不代表暴发。
+- **EARS/CUSUM 告警不考虑季节性**（可用 `farrington`），每年冬季出现信号属正常；它们只表示统计偏离，不代表暴发。
 - **仅支持周数据**（每个序列一套星期网格，`season_length` 为 2–60），默认每序列最多 5200 个观测。
 - **单节点。** 内嵌 DuckDB 一个数据库文件只允许一个服务进程；分析串行；无集群、无读鉴权、无限流（请用反向代理）。
 - 内置演示数据是 CDC FluView 全国序列的**固定快照**，不是实时数据。

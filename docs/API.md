@@ -13,11 +13,12 @@ OpenAPI/Swagger: `/docs`, schema `/openapi.json` (committed copy: [openapi.json]
 | `GET /api/v1/series/{id}` | – | metadata |
 | `DELETE /api/v1/series/{id}[?cascade]` | key | delete (409 if derived series depend on it) |
 | `GET /api/v1/series/{id}/data?start&end&limit&offset` | – | observations (limit 1..5000, default 1000); `/observations` = deprecated alias |
-| `GET /api/v1/series/{id}/quality` | – | data-quality checklist |
+| `GET /api/v1/series/{id}/quality` | – | data-quality checklist + `gate` (stage-1 data checks and measured metrics) |
 | `GET /api/v1/series/{id}/lineage` | – | derivation, sources, alignment, dependents |
-| `GET /api/v1/series/{id}/forecast?horizon` | – | backtest + policy + forecast (horizon 1..26); first call takes seconds (backtest), then cached; models see the last 840 weeks only |
-| `GET /api/v1/series/{id}/policy?horizon` | – | policy only |
-| `GET /api/v1/series/{id}/alerts?method&baseline` | – | ad-hoc EARS C1–C3 / CUSUM scan |
+| `GET /api/v1/series/{id}/forecast?horizon&as_of` | – | backtest + policy + **gate** + forecast (horizon 1..26); first call takes seconds (backtest), then cached; models see the last 840 weeks only. A refusal is **200** with `forecast: null` |
+| `GET /api/v1/series/{id}/policy?horizon&as_of` | – | policy fields + `gate` |
+| `GET /api/v1/series/{id}/gate?horizon&as_of` | – | the full gate decision (reason codes, en/zh/fr messages, metrics, thresholds, recommended action), data + backtest checks (cached with the forecast); data-only checks are in `/quality` → `gate` |
+| `GET /api/v1/series/{id}/alerts?method&baseline` | – | ad-hoc EARS C1–C3 / CUSUM / `farrington` scan with alert `gate` and `confidence` |
 | `GET /api/v1/series/{id}/export?format=csv\|json\|parquet` | – | download one series |
 | `POST /api/v1/derive` | key | create derived series (`series_id, name, expr, bindings?, align?, indicator_type?, overwrite?`) |
 | `POST /api/v1/derive/preview` | – | dry run: inferred kind, alignment, warnings; stores nothing |
@@ -25,6 +26,12 @@ OpenAPI/Swagger: `/docs`, schema `/openapi.json` (committed copy: [openapi.json]
 | `GET /api/v1/alerts/rules[?series_id]`, `PUT /api/v1/alerts/rules`, `DELETE /api/v1/alerts/rules/{rule_id}` | – / key / key | alert rules |
 | `GET /api/v1/alerts/evaluate?limit&offset` | – | evaluate stored rules (paginated) |
 | `POST /api/v1/export` | key | static export (manifest + JSON + Parquet) into `AILAB_OUT` |
+
+**0.3 changes (additive).** `forecast`/`policy` responses gain `gate` (policy also `gate_decision`, `reason_codes`,
+`limited`); `meta` accepts `gate` (threshold overrides) and `mask_periods`; `quality` gains `gate`; alert scans gain
+`gate`/`confidence`/`status`; `farrington` is a new alert method. No field was removed or renamed, `schema_version`
+stays `"1"`; clients that ignore unknown keys need no change. Data-quality refusals stay HTTP 200 (see
+[MODEL_POLICY.md](MODEL_POLICY.md#http-semantics)).
 
 Paginated responses: `{items, total, limit, offset, next_offset}`.
 
@@ -56,6 +63,8 @@ Malformed JSON (e.g. invalid UTF-8) may be answered `400 bad_request` instead of
 | `AILAB_MAX_SERIES` | 500 | series in the store |
 | `AILAB_CORS_ORIGINS` | none (CORS off) | comma-separated allowed origins; no credentials, methods GET/POST/PUT/DELETE |
 | `AILAB_LOG_LEVEL` | `INFO` | |
+| `AILAB_GATE_<THRESHOLD>`, `AILAB_GATE_JSON` | – | quality-gate threshold overrides, see [MODEL_POLICY.md](MODEL_POLICY.md#configuration-layers-later-wins); invalid values stop the service at start-up |
+| `AILAB_GATE_STALE_CHECK` | `0` | `1`: judge data staleness against today's date (otherwise only when `as_of` is passed) |
 
 Logs: one line per request (`request_id METHOD path -> status ms`); no headers, bodies or query
 strings; the configured key is also redacted from any log message. Models are never persisted

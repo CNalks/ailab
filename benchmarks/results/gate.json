@@ -1,0 +1,385 @@
+{
+ "full": {
+  "constant": {
+   "codes": {
+    "constant_series": 3
+   },
+   "decision": {
+    "refused": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.1,
+   "truth": "bad"
+  },
+  "gaps_40pct": {
+   "codes": {
+    "long_gap_at_end": 1,
+    "too_many_gaps": 3
+   },
+   "decision": {
+    "refused": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.4,
+   "truth": "bad"
+  },
+  "level_shift_x3": {
+   "codes": {
+    "structural_break": 3,
+    "trend_nonstationary": 3
+   },
+   "decision": {
+    "limited": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.6,
+   "truth": "hard"
+  },
+  "mostly_zeros": {
+   "codes": {
+    "mostly_zeros": 3
+   },
+   "decision": {
+    "refused": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.6,
+   "truth": "bad"
+  },
+  "random_walk": {
+   "codes": {
+    "no_seasonal_signal_but_seasonal_expected": 3,
+    "no_skill_beyond_persistence": 1,
+    "outlier_contamination": 2,
+    "reporting_delay_tail_incomplete": 1,
+    "structural_break": 3,
+    "trend_nonstationary": 3
+   },
+   "decision": {
+    "limited": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.0,
+   "truth": "hard"
+  },
+  "real_num_ili": {
+   "codes": {
+    "trend_nonstationary": 1
+   },
+   "decision": {
+    "allowed": 1
+   },
+   "n": 1,
+   "sec_per_series": 5.2,
+   "truth": "good"
+  },
+  "real_wili": {
+   "codes": {},
+   "decision": {
+    "allowed": 1
+   },
+   "n": 1,
+   "sec_per_series": 3.7,
+   "truth": "good"
+  },
+  "seasonal": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.9,
+   "truth": "good"
+  },
+  "seasonal_4_seasons": {
+   "codes": {
+    "short_backtest_span": 3
+   },
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.9,
+   "truth": "good"
+  },
+  "seasonal_gaps3pct": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.9,
+   "truth": "good"
+  },
+  "seasonal_lowcount": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.6,
+   "truth": "good"
+  },
+  "seasonal_overdispersed": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.8,
+   "truth": "good"
+  },
+  "seasonal_prop": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.1,
+   "truth": "good"
+  },
+  "seasonal_sharp": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.9,
+   "truth": "good"
+  },
+  "seasonal_trend": {
+   "codes": {},
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.7,
+   "truth": "good"
+  },
+  "short_1.5_seasons": {
+   "codes": {
+    "too_short": 3
+   },
+   "decision": {
+    "refused": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.0,
+   "truth": "bad"
+  },
+  "too_short_30w": {
+   "codes": {
+    "too_short": 3
+   },
+   "decision": {
+    "refused": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.0,
+   "truth": "bad"
+  },
+  "trailing_gap_30w": {
+   "codes": {
+    "long_gap_at_end": 3
+   },
+   "decision": {
+    "refused": 3
+   },
+   "n": 3,
+   "sec_per_series": 0.3,
+   "truth": "bad"
+  },
+  "white_noise_no_season": {
+   "codes": {
+    "no_seasonal_signal_but_seasonal_expected": 3
+   },
+   "decision": {
+    "allowed": 3
+   },
+   "n": 3,
+   "sec_per_series": 2.3,
+   "truth": "hard"
+  }
+ },
+ "stage1": {
+  "constant": {
+   "codes": {
+    "constant_series": 8
+   },
+   "decision": {
+    "refused": 8
+   },
+   "n": 8,
+   "truth": "bad"
+  },
+  "gaps_40pct": {
+   "codes": {
+    "long_gap_at_end": 3,
+    "too_many_gaps": 8
+   },
+   "decision": {
+    "refused": 8
+   },
+   "n": 8,
+   "truth": "bad"
+  },
+  "level_shift_x3": {
+   "codes": {
+    "structural_break": 8,
+    "trend_nonstationary": 8
+   },
+   "decision": {
+    "limited": 8
+   },
+   "n": 8,
+   "truth": "hard"
+  },
+  "mostly_zeros": {
+   "codes": {
+    "mostly_zeros": 8
+   },
+   "decision": {
+    "refused": 8
+   },
+   "n": 8,
+   "truth": "bad"
+  },
+  "random_walk": {
+   "codes": {
+    "no_seasonal_signal_but_seasonal_expected": 7,
+    "outlier_contamination": 3,
+    "reporting_delay_tail_incomplete": 1,
+    "structural_break": 4,
+    "trend_nonstationary": 6
+   },
+   "decision": {
+    "allowed": 6,
+    "limited": 2
+   },
+   "n": 8,
+   "truth": "hard"
+  },
+  "real_num_ili": {
+   "codes": {
+    "trend_nonstationary": 1
+   },
+   "decision": {
+    "allowed": 1
+   },
+   "n": 1,
+   "truth": "good"
+  },
+  "real_wili": {
+   "codes": {},
+   "decision": {
+    "allowed": 1
+   },
+   "n": 1,
+   "truth": "good"
+  },
+  "seasonal": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_4_seasons": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_gaps3pct": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_lowcount": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_overdispersed": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_prop": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_sharp": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "seasonal_trend": {
+   "codes": {},
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "good"
+  },
+  "short_1.5_seasons": {
+   "codes": {
+    "too_short": 8
+   },
+   "decision": {
+    "refused": 8
+   },
+   "n": 8,
+   "truth": "bad"
+  },
+  "too_short_30w": {
+   "codes": {
+    "too_short": 8
+   },
+   "decision": {
+    "refused": 8
+   },
+   "n": 8,
+   "truth": "bad"
+  },
+  "trailing_gap_30w": {
+   "codes": {
+    "long_gap_at_end": 8
+   },
+   "decision": {
+    "refused": 8
+   },
+   "n": 8,
+   "truth": "bad"
+  },
+  "white_noise_no_season": {
+   "codes": {
+    "no_seasonal_signal_but_seasonal_expected": 7
+   },
+   "decision": {
+    "allowed": 8
+   },
+   "n": 8,
+   "truth": "hard"
+  }
+ }
+}
