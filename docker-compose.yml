@@ -1,0 +1,39 @@
+# One command:  docker compose up        ->  http://127.0.0.1:8000/docs  and  /health
+# Batch export: docker compose --profile batch run --rm demo   ->  ./out/
+# No Postgres / Redis / Celery / Supabase. Data lives in the "ailab-data" volume (embedded DuckDB).
+services:
+  api:
+    image: ghcr.io/cnalks/ailab:latest   # or: build: .   (set `build: .` to build locally)
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"            # bind to localhost; put a reverse proxy in front to expose
+    environment:
+      AILAB_PRELOAD_DEMO: "1"
+      # Empty / unset => read-only service. Set a strong random value to enable write endpoints.
+      AILAB_API_KEY: "${AILAB_API_KEY:-}"
+    volumes:
+      - ailab-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  demo:
+    profiles: ["batch"]
+    image: ghcr.io/cnalks/ailab:latest
+    build: .
+    command: ["demo", "--out", "/out"]
+    volumes:
+      - ./out:/out
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  ailab-data:

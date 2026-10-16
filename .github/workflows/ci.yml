@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run pytest
+      - name: Demo end to end (offline fixture)
+        run: uv run ailab demo --out out && test -s out/manifest.json
+  docker:
+    runs-on: ubuntu-24.04
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ailab:ci .
+      - name: Smoke test (/health, non-root)
+        run: |
+          docker run -d --name ailab -p 8000:8000 ailab:ci
+          for i in $(seq 1 30); do curl -fs localhost:8000/health && break || sleep 2; done
+          curl -fs localhost:8000/health | grep '"status":"ok"'
+          test "$(docker exec ailab id -u)" != "0"
+          curl -fs "localhost:8000/api/v1/series/us_ilinet_wili/policy"
+          docker ps --filter name=ailab --format '{{.Status}}'
