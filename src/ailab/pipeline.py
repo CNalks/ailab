@@ -22,6 +22,10 @@ SCHEMA_VERSION = "1"
 DEFAULT_ALERTS = ("ears_c2", "cusum")
 DEFAULT_STEP = 3
 DEFAULT_BACKTEST_SEASONS = 3.0  # default backtest spans >= 3 seasons (n_windows derived from it)
+# Cost of the rolling-origin backtest grows roughly quadratically with history length (measured:
+# 520 weeks 3.6 s, 1040 weeks 13 s, 1560 weeks 29 s, 5200 weeks > 4 min). Models therefore only see
+# the most recent MAX_MODEL_WEEKS (~16 years); quality checks, alerts and exports use all data.
+MAX_MODEL_WEEKS = 840
 
 
 def analyse(
@@ -63,10 +67,15 @@ def analyse_frame(
     if n_windows is None:
         n_windows = windows_for_seasons(DEFAULT_BACKTEST_SEASONS, meta.season_length, step)
     bt = None
+    truncated = len(g) > MAX_MODEL_WEEKS
+    if truncated:
+        g_model = g.tail(MAX_MODEL_WEEKS).reset_index(drop=True)
+    else:
+        g_model = g
     # backtest only when the quality gate does not already forbid forecasting
     quality_blocks = {c["check"] for c in q["checks"] if not c["ok"] and c["severity"] == "fail"}
     if not quality_blocks and meta.indicator_type != "event":
-        bt = rolling_origin_backtest(g, meta.season_length, horizon, n_windows, step, tf)
+        bt = rolling_origin_backtest(g_model, meta.season_length, horizon, n_windows, step, tf)
     widths = calib = None
     if bt is not None:
         widths = interval_widths(bt, choose_model(bt)[0])
@@ -75,7 +84,7 @@ def analyse_frame(
     fc = None
     if policy.forecast_allowed and model and widths:
         fc = build_forecast(
-            g,
+            g_model,
             model,
             widths,
             policy.horizon_weeks,
@@ -87,6 +96,11 @@ def analyse_frame(
             k: {**v, "n_windows": widths["n_windows"]} for k, v in widths["calibration"].items()
         }
         fc["finite_sample_valid"] = widths["finite_sample_valid"]
+    if truncated:
+        policy.warnings.append(
+            f"models were fitted on the most recent {MAX_MODEL_WEEKS} weeks only "
+            f"({len(g)} available); older history is not used for forecasting"
+        )
     rule_list = rules or [
         AlertRule(rule_id=f"default_{m}", series_id=meta.series_id, method=m)
         for m in DEFAULT_ALERTS
@@ -110,7 +124,12 @@ def analyse_frame(
         "series": meta.model_dump(),
         "data_through": q["data_through"],
         "quality": q,
-        "model_input": {"interpolated_points": n_interp, "max_gap_weeks": quality.MAX_INTERP_GAP},
+        "model_input": {
+            "interpolated_points": n_interp,
+            "max_gap_weeks": quality.MAX_INTERP_GAP,
+            "model_weeks_used": len(g_model),
+            "model_weeks_cap": MAX_MODEL_WEEKS,
+        },
         "policy": policy.model_dump(),
         "backtest": None if bt is None else _backtest_json(bt, model, widths),
         "forecast": fc,

@@ -30,7 +30,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .. import __version__, alerts, derive, derive_service, quality
 from ..demo import load_fluview_demo
-from ..export import export_site
+from ..export import BudgetError, export_site
 from ..pipeline import analyse
 from ..schema import SERIES_ID_RE, AlertRule, SeriesMeta
 from ..store import DependencyError, SeriesStore
@@ -237,6 +237,10 @@ def create_app(
             "delete them first or pass cascade=true",
             {"dependents": exc.dependents},
         )
+
+    @app.exception_handler(BudgetError)
+    async def _budget_exc(request: Request, exc: BudgetError):
+        return _err(request, 422, "export_budget_exceeded", str(exc))
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):
