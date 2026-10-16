@@ -29,6 +29,7 @@ OPS = [
     "GET /api/v1/series/{id}/lineage",
     "GET /api/v1/series/{id}/forecast",
     "GET /api/v1/series/{id}/policy",
+    "GET /api/v1/series/{id}/gate",
     "GET /api/v1/series/{id}/alerts",
     "GET /api/v1/series/{id}/export",
     "POST /api/v1/series/{id}/recompute",
