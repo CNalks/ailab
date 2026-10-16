@@ -45,7 +45,11 @@ packages = ["src/ailab"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m 'not e2e and not slow'"
+markers = [
+  "e2e: black-box tests against a RUNNING service (make e2e / make e2e-container)",
+  "slow: takes more than a few seconds (large series, long runs)",
+]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning", "ignore::UserWarning"]
 
 [tool.ruff]
