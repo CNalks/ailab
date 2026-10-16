@@ -8,7 +8,9 @@ from collections import defaultdict
 from pathlib import Path
 
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "out")
-runs = {p.stem.removeprefix("e2e-"): json.loads(p.read_text()) for p in sorted(out.glob("e2e-*.json"))}
+runs = {
+    p.stem.removeprefix("e2e-"): json.loads(p.read_text()) for p in sorted(out.glob("e2e-*.json"))
+}
 if not runs:
     sys.exit("no out/e2e-*.json found; run `make e2e` first")
 
@@ -31,8 +33,10 @@ for name, d in runs.items():
     c = defaultdict(int)
     for v in o.values():
         c[v] += 1
-    print(f"## {name}: {len(o)} tests, passed {c['passed']}, failed {c['failed']}, "
-          f"skipped {c['skipped']}, errors {len(o) - sum(c.values())}; {d['requests']} HTTP requests\n")
+    print(
+        f"## {name}: {len(o)} tests, passed {c['passed']}, failed {c['failed']}, "
+        f"skipped {c['skipped']}, errors {len(o) - sum(c.values())}; {d['requests']} HTTP requests\n"
+    )
     cov = defaultdict(lambda: defaultdict(lambda: [0, 0]))  # route -> scen -> [passed, total]
     for node, routes in d["routes"].items():
         scen = SCEN.get(re.search(r"(test_\w+)\.py", node).group(1), "other")
