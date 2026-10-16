@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ailab"
+version = "0.1.0"
+description = "Time-series engine for infectious-disease surveillance: store, derive, honest forecasts with policy metadata, alerts, static export. Library + CLI + thin service API."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = { text = "Apache-2.0" }
+authors = [{ name = "CNalks", email = "linzhijian.cn@gmail.com" }]
+keywords = ["epidemiology", "surveillance", "time-series", "forecasting", "public-health"]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+# Runtime dependencies are pinned exactly; uv.lock additionally pins hashes of the full tree.
+dependencies = [
+  "statsforecast==2.1.1",
+  "pandas==2.3.3",
+  "numpy==2.5.4",
+  "duckdb==1.5.6",
+  "pyarrow==26.0.0",
+  "pydantic==2.14.1",
+  "typer==0.27.3",
+  "fastapi==0.143.2",
+  "uvicorn==0.54.0",
+  "httpx==0.28.1",
+]
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "ruff==0.17.1"]
+
+[project.scripts]
+ailab = "ailab.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/CNalks"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ailab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning", "ignore::UserWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]
