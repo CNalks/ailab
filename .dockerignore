@@ -1,11 +1,8 @@
-.git
-.venv
-out
-data
+# Build context = Dockerfile + pyproject/uv.lock/README + src only.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src
 **/__pycache__
-.pytest_cache
-.ruff_cache
-*.duckdb
-.env*
-tests
-docs
+**/*.pyc

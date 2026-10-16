@@ -31,6 +31,15 @@ jobs:
           docker run -d --name ailab -p 8000:8000 ailab:ci
           for i in $(seq 1 30); do curl -fs localhost:8000/health && break || sleep 2; done
           curl -fs localhost:8000/health | grep '"status":"ok"'
+          curl -fs localhost:8000/ready | grep '"status":"ready"'
+          curl -fs localhost:8000/docs -o /dev/null
           test "$(docker exec ailab id -u)" != "0"
           curl -fs "localhost:8000/api/v1/series/us_ilinet_wili/policy"
           docker ps --filter name=ailab --format '{{.Status}}'
+      - name: Batch demo inside the container (read-only root fs)
+        run: |
+          mkdir -p out && chmod 777 out
+          docker run --rm --read-only --tmpfs /tmp --cap-drop ALL -v "$PWD/out:/out" ailab:ci demo --out /out
+          test -s out/manifest.json
+      - name: Image size
+        run: docker image inspect ailab:ci --format '{{.Size}} bytes'

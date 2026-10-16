@@ -10,7 +10,10 @@ services:
     environment:
       AILAB_PRELOAD_DEMO: "1"
       # Empty / unset => read-only service. Set a strong random value to enable write endpoints.
+      # (>= 16 characters, e.g. `openssl rand -hex 24`; shorter keys refuse to start)
       AILAB_API_KEY: "${AILAB_API_KEY:-}"
+      # Browser clients only; comma-separated origins. Empty = CORS off.
+      AILAB_CORS_ORIGINS: "${AILAB_CORS_ORIGINS:-}"
     volumes:
       - ailab-data:/data
     read_only: true
@@ -19,6 +22,12 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     restart: unless-stopped
 
   demo:
