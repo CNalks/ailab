@@ -178,16 +178,22 @@ def gate_cmd(
 @app.command()
 def alert(
     series_id: str,
-    method: str = typer.Option("ears_c2", help="ears_c1 | ears_c2 | ears_c3 | cusum"),
+    method: str = typer.Option(
+        "ears_c2", help="ears_c1 | ears_c2 | ears_c3 | cusum | farrington (seasonal, counts)"
+    ),
     baseline: int = typer.Option(7, min=3),
     db: Path | None = DB_OPT,
 ):
     """Statistical-signal scan (EARS / CUSUM) over a series."""
-    from . import alerts, quality
+    from . import alerts
 
     store = _store(db)
-    g, _ = quality.model_input(store.get_observations(series_id))
-    typer.echo(json.dumps(alerts.summarise(alerts.detect(g, method, baseline)), indent=2))
+    try:
+        meta = store.get_meta(series_id)
+        out = alerts.scan(meta, store.get_observations(series_id), method, baseline)
+    except (KeyError, ValueError) as exc:
+        raise _fail(exc) from None
+    typer.echo(json.dumps(out, indent=2, ensure_ascii=False))
 
 
 series_app = typer.Typer(no_args_is_help=True, help="Manage stored series (needs --db).")

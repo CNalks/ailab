@@ -294,6 +294,13 @@ ACTION_FOR = {
     "skill_horizon_too_short": "monitor_only",
     "no_skill_beyond_persistence": "use_limited_forecast",
     "interval_undercoverage": "use_limited_forecast",
+    "alert_baseline_too_short": "collect_more_history",
+    "alert_baseline_gappy": "repair_gaps",
+    "alert_baseline_low_counts": "monitor_only",
+    "alert_baseline_constant": "review_series_definition",
+    "alert_baseline_contaminated": "mask_outlier_period",
+    "alert_not_enough_seasons": "collect_more_history",
+    "alert_method_not_applicable": "review_manually",
 }
 # legacy policy.reason / display_mode for each blocking code
 LEGACY_REASON = {
@@ -1257,7 +1264,15 @@ def assess_alert(
     met: dict = {"n_periods": n, "baseline": baseline, "guard": guard}
     needed = baseline + guard + cfg.alert_min_eval_periods
     seasons = n / meta.season_length
-    if method == "farrington":
+    if method == "farrington" and meta.indicator_type == "proportion":
+        reasons.append(
+            Reason(
+                "alert_method_not_applicable",
+                "block",
+                {"method": method, "kind": meta.indicator_type},
+            )
+        )
+    elif method == "farrington":
         if seasons < cfg.farrington_min_seasons:
             reasons.append(
                 Reason(
@@ -1310,7 +1325,8 @@ def assess_alert(
                 reasons.append(
                     Reason(
                         "alert_baseline_low_counts",
-                        "block",
+                        # sparse 'event' series are alerted on by design: warn, do not refuse
+                        "warn" if meta.indicator_type == "event" else "block",
                         {"mean": mean, "nonzero_pct": 100 * nzs},
                         {
                             "alert_min_baseline_nonzero": cfg.alert_min_baseline_nonzero,

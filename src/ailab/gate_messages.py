@@ -235,6 +235,13 @@ REASONS: dict[str, dict[str, str]] = {
         "fr": "La fenêtre de base contient une période aberrante (probable épisode précédent) "
         "qui gonfle la valeur attendue et masque les signaux.",
     },
+    "alert_method_not_applicable": {
+        "en": "{method} needs counts (Poisson model); it is not applicable to '{kind}' series. "
+        "Use ears_c2 or cusum.",
+        "zh": "{method} 需要计数数据（泊松模型），不适用于“{kind}”类序列。请使用 ears_c2 或 cusum。",
+        "fr": "{method} requiert des comptages (modèle de Poisson) ; non applicable aux séries "
+        "« {kind} ». Utilisez ears_c2 ou cusum.",
+    },
     "alert_not_enough_seasons": {
         "en": "{method} needs {min_seasons} full seasons of history; only {seasons:.1f} available.",
         "zh": "{method} 需要 {min_seasons} 个完整季节的历史；目前仅 {seasons:.1f} 个。",

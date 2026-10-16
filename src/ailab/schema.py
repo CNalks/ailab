@@ -15,7 +15,7 @@ IndicatorType = Literal["count", "proportion", "rate", "event"]
 KINDS: tuple[str, ...] = ("count", "proportion", "rate", "event")
 DisplayMode = Literal["forecast_band", "forecast_point_only", "monitor_only", "history_only"]
 ModelFamily = Literal["mstl_ets", "theta", "naive", "seasonal_naive", "none"]
-AlertMethod = Literal["ears_c1", "ears_c2", "ears_c3", "cusum"]
+AlertMethod = Literal["ears_c1", "ears_c2", "ears_c3", "cusum", "farrington"]
 
 SERIES_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,63}$")
 

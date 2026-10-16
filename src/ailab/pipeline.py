@@ -24,6 +24,7 @@ SCHEMA_VERSION = (
     "1"  # additive changes only (0.3 adds `gate`, policy.gate_decision/reason_codes/limited)
 )
 DEFAULT_ALERTS = ("ears_c2", "cusum")
+SEASONAL_ALERT = "farrington"  # added when applicable (>= 3 seasons, count/rate kinds)
 DEFAULT_STEP = 3
 DEFAULT_BACKTEST_SEASONS = 3.0  # default backtest spans >= 3 seasons (n_windows derived from it)
 # Cost of the rolling-origin backtest grows roughly quadratically with history length (measured:
@@ -143,21 +144,25 @@ def analyse_frame(
             f"{int(masked.sum())} masked weeks were replaced by same-week values of other "
             "seasons for fitting and are excluded from backtest scoring"
         )
+    default_methods = list(DEFAULT_ALERTS)
+    if meta.indicator_type in ("count", "rate") and len(g) >= (
+        cfg.farrington_min_seasons * meta.season_length
+    ):
+        default_methods.append(SEASONAL_ALERT)
     rule_list = rules or [
         AlertRule(rule_id=f"default_{m}", series_id=meta.series_id, method=m)
-        for m in DEFAULT_ALERTS
+        for m in default_methods
     ]
     alert_out = []
     for rule in rule_list:
         if not rule.enabled:
             continue
-        res = alerts.evaluate_rule(rule, g)
         alert_out.append(
             {
                 "rule_id": rule.rule_id,
                 "method": rule.method,
                 "baseline_weeks": rule.baseline,
-                **alerts.summarise(res),
+                **alerts.scan(meta, raw, rule.method, rule.baseline, rule.threshold),
             }
         )
     result = {

@@ -717,16 +717,15 @@ def create_app(
     @r.get("/series/{series_id}/alerts", tags=["alerts"], summary="Ad-hoc alert scan")
     def series_alerts(
         series_id: str = SeriesId,
-        method: Literal["ears_c1", "ears_c2", "ears_c3", "cusum"] = "ears_c2",
+        method: Literal["ears_c1", "ears_c2", "ears_c3", "cusum", "farrington"] = "ears_c2",
         baseline: int = Query(7, ge=3, le=104),
     ) -> dict:
         """Statistical-signal scan (no stored rule needed). Not an outbreak declaration."""
-        _meta(series_id)
-        g, _ = quality.model_input(store.get_observations(series_id))
+        meta = _meta(series_id)
         return {
             "series_id": series_id,
             "method": method,
-            **alerts.summarise(alerts.detect(g, method, baseline)),
+            **alerts.scan(meta, store.get_observations(series_id), method, baseline),
         }
 
     @r.get("/alerts/evaluate", tags=["alerts"], summary="Evaluate stored rules")
@@ -734,9 +733,18 @@ def create_app(
         rules = [x for x in store.list_rules() if x.enabled]
         out = []
         for rule in rules[offset : offset + limit]:
-            g, _ = quality.model_input(store.get_observations(rule.series_id))
+            meta = _meta(rule.series_id)
             out.append(
-                {"rule": rule.model_dump(), **alerts.summarise(alerts.evaluate_rule(rule, g))}
+                {
+                    "rule": rule.model_dump(),
+                    **alerts.scan(
+                        meta,
+                        store.get_observations(rule.series_id),
+                        rule.method,
+                        rule.baseline,
+                        rule.threshold,
+                    ),
+                }
             )
         return _page(out, len(rules), limit, offset)
 
