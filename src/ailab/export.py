@@ -56,6 +56,7 @@ def export_site(
             "sha256": hashlib.sha256(blob).hexdigest(),
             "data_through": res["data_through"],
             "indicator_type": res["series"]["indicator_type"],
+            "derived_from": res["series"]["derived_from"],
             "source_id": res["series"]["source_id"],
             "policy": {
                 k: res["policy"][k]
@@ -74,11 +75,13 @@ def export_site(
             pq = store.export_parquet(sid, out / "downloads" / f"{sid}.parquet")
             entry["download"] = f"downloads/{pq.name}"
         entries.append(entry)
-        if res["series"]["source_id"]:
+        # sources of this series and (for derived series) of everything it was computed from
+        sids = {res["series"]["source_id"]}
+        for src in res["series"]["derived_from"]:
+            sids.add(store.get_meta(src).source_id)
+        for sid_ in sorted(x for x in sids if x):
             try:
-                sources_used[res["series"]["source_id"]] = get_source(
-                    res["series"]["source_id"]
-                ).to_dict()
+                sources_used[sid_] = get_source(sid_).to_dict()
             except KeyError:
                 pass
     if total > MAX_TOTAL_JSON:
