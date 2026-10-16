@@ -1,0 +1,11 @@
+{
+  "source_id": "cdc_fluview",
+  "region": "nat",
+  "epiweeks": "201040-202639",
+  "fields": "epiweek,issue,lag,num_ili,num_patients,wili,ili",
+  "retrieved_at": "2026-10-16T18:16:02+08:00",
+  "request_url": "https://api.delphi.cmu.edu/epidata/fluview/?regions=nat&epiweeks=201040-202639&fields=epiweek,issue,lag,num_ili,num_patients,wili,ili",
+  "sha256": "e621152ed0c9f3cd7c390883fdd8c5d9dc37667172a2c2c5cd87eb65521a9469",
+  "rows": 835,
+  "data_through_epiweek": 202639
+}
