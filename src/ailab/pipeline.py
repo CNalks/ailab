@@ -11,21 +11,25 @@ from .forecast import (
     choose_model,
     interval_widths,
     rolling_origin_backtest,
+    windows_for_seasons,
 )
 from .policy import decide
 from .schema import AlertRule, SeriesMeta
 from .store import SeriesStore
+from .transforms import for_kind
 
 SCHEMA_VERSION = "1"
 DEFAULT_ALERTS = ("ears_c2", "cusum")
+DEFAULT_STEP = 3
+DEFAULT_BACKTEST_SEASONS = 3.0  # default backtest spans >= 3 seasons (n_windows derived from it)
 
 
 def analyse(
     store: SeriesStore,
     series_id: str,
     horizon: int = 8,
-    n_windows: int = 26,
-    step: int = 2,
+    n_windows: int | None = None,
+    step: int = DEFAULT_STEP,
     include_observations: bool = True,
     today: pd.Timestamp | None = None,
 ) -> dict:
@@ -48,18 +52,21 @@ def analyse_frame(
     raw: pd.DataFrame,
     rules: list[AlertRule] | None = None,
     horizon: int = 8,
-    n_windows: int = 26,
-    step: int = 2,
+    n_windows: int | None = None,
+    step: int = DEFAULT_STEP,
     include_observations: bool = True,
     today: pd.Timestamp | None = None,
 ) -> dict:
     q = quality.check_series(meta, raw, today)
     g, n_interp = quality.model_input(raw)
+    tf = for_kind(meta.indicator_type, meta.value_scale)
+    if n_windows is None:
+        n_windows = windows_for_seasons(DEFAULT_BACKTEST_SEASONS, meta.season_length, step)
     bt = None
     # backtest only when the quality gate does not already forbid forecasting
     quality_blocks = {c["check"] for c in q["checks"] if not c["ok"] and c["severity"] == "fail"}
     if not quality_blocks and meta.indicator_type != "event":
-        bt = rolling_origin_backtest(g, meta.season_length, horizon, n_windows, step)
+        bt = rolling_origin_backtest(g, meta.season_length, horizon, n_windows, step, tf)
     widths = calib = None
     if bt is not None:
         widths = interval_widths(bt, choose_model(bt)[0])
@@ -73,7 +80,7 @@ def analyse_frame(
             widths,
             policy.horizon_weeks,
             meta.season_length,
-            meta.indicator_type,
+            tf,
             band=policy.display_mode == "forecast_band",
         )
         fc["calibration"] = {
@@ -127,6 +134,8 @@ def _backtest_json(bt, model: str | None, widths: dict | None) -> dict:
     return {
         "design": "rolling-origin; each origin refits using only earlier data",
         "n_windows": bt.n_windows,
+        "seasons_covered": bt.seasons_covered,
+        "transform": bt.transform.name,
         "horizon": bt.horizon,
         "step_weeks": bt.step,
         "first_origin": cv["cutoff"].min().date().isoformat(),

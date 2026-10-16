@@ -7,7 +7,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+# Series kind (``indicator_type``). count: non-negative integer-like tallies (log1p transform);
+# proportion: part/whole, bounded (logit transform, clipped to its scale); rate: generic
+# non-negative real measure (log1p transform); event: sparse notifiable events (monitor only).
 IndicatorType = Literal["count", "proportion", "rate", "event"]
+KINDS: tuple[str, ...] = ("count", "proportion", "rate", "event")
 DisplayMode = Literal["forecast_band", "forecast_point_only", "monitor_only", "history_only"]
 ModelFamily = Literal["mstl_ets", "theta", "naive", "seasonal_naive", "none"]
 AlertMethod = Literal["ears_c1", "ears_c2", "ears_c3", "cusum"]
@@ -23,6 +27,8 @@ class SeriesMeta(BaseModel):
     frequency: Literal["W"] = "W"  # weekly (week starts Sunday) in v0.1
     unit: str = ""
     indicator_type: IndicatorType = "count"
+    # Upper bound of a ``proportion`` series: 1 (fractions) or 100 (percent). Ignored otherwise.
+    value_scale: Literal[1, 100] = 1
     season_length: int = Field(default=52, ge=2, le=60)
     source_id: str = ""
     licence: str = ""
@@ -30,8 +36,23 @@ class SeriesMeta(BaseModel):
     notice: str = ""
     retrieved_at: str = ""
     sha256: str = ""
+    created_at: str = ""
+    # --- lineage of derived (composite) series; empty for base series -------------------
     derived_expr: str | None = None
-    derived_from: list[str] = Field(default_factory=list)
+    derived_from: list[str] = Field(default_factory=list)  # source series ids (sorted)
+    bindings: dict[str, str] = Field(default_factory=dict)  # alias used in expr -> series id
+    lineage: dict | None = None  # kind-inference trail, alignment report, source fingerprints
+
+    @field_validator("name")
+    @classmethod
+    def _name_len(cls, v: str) -> str:
+        if not v.strip() or len(v) > 200:
+            raise ValueError("name must be 1..200 characters")
+        return v
+
+    @property
+    def is_derived(self) -> bool:
+        return self.derived_expr is not None
 
     @field_validator("series_id")
     @classmethod

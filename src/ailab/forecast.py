@@ -18,6 +18,8 @@ import pandas as pd
 from statsforecast import StatsForecast
 from statsforecast.models import MSTL, AutoETS, AutoTheta, Naive, SeasonalNaive
 
+from .transforms import Transform, for_kind
+
 BASELINE = "SeasonalNaive"
 CANDIDATES = ("MSTL", "AutoTheta", "Naive")
 FAMILY = {
@@ -39,40 +41,67 @@ def _sf(season_length: int) -> StatsForecast:
     return StatsForecast(models=models, freq="7D", n_jobs=1)
 
 
-def _frame(g: pd.DataFrame) -> pd.DataFrame:
-    return pd.DataFrame({"unique_id": "s", "ds": g["ds"], "y": g["y"].astype(float)})
+def _frame(g: pd.DataFrame, tf: Transform | None = None) -> pd.DataFrame:
+    y = g["y"].to_numpy(dtype=float)
+    if tf is not None:
+        y = np.where(np.isnan(y), np.nan, tf.forward(y))
+    return pd.DataFrame({"unique_id": "s", "ds": g["ds"], "y": y})
 
 
 @dataclass
 class Backtest:
-    cv: pd.DataFrame  # unique_id, ds, cutoff, y, <models>, h
+    cv: pd.DataFrame  # unique_id, ds, cutoff, y, <models>, h   (original scale)
+    cv_z: pd.DataFrame  # same, in the transformed (model) space: defines the intervals
     n_windows: int
     horizon: int
     step: int
     scale: float
     metrics: dict
+    transform: Transform
+    seasons_covered: float  # span from first origin to last target, in seasons
 
     def abs_errors(self, model: str) -> dict[int, np.ndarray]:
+        """Absolute backtest errors per horizon in the transformed space."""
         out = {}
-        for h, grp in self.cv.groupby("h"):
+        for h, grp in self.cv_z.groupby("h"):
             out[int(h)] = (grp["y"] - grp[model]).abs().to_numpy()
         return out
 
 
+def windows_for_seasons(seasons: float, season_length: int, step: int) -> int:
+    """Number of rolling origins needed so that the backtest spans ``seasons`` seasons."""
+    return max(5, math.ceil(seasons * season_length / step))
+
+
 def rolling_origin_backtest(
-    g: pd.DataFrame, season_length: int = 52, horizon: int = 8, n_windows: int = 26, step: int = 2
+    g: pd.DataFrame,
+    season_length: int = 52,
+    horizon: int = 8,
+    n_windows: int = 26,
+    step: int = 2,
+    transform: Transform | None = None,
 ) -> Backtest | None:
-    """``g`` must be a regular weekly frame without NaN. Returns None if too short."""
+    """``g`` must be a regular weekly frame without NaN. Returns None if too short.
+
+    Models are fitted on ``transform.forward(y)``; the returned ``cv`` is back-transformed so
+    metrics are in original units, ``cv_z`` keeps the model space for the interval calibration.
+    """
+    tf = transform or Transform("identity")
     n = len(g)
     max_windows = (n - 2 * season_length - horizon) // step + 1
     n_windows = min(n_windows, max_windows)
     if n_windows < 5 or g["y"].isna().any():
         return None
-    cv = _sf(season_length).cross_validation(
-        df=_frame(g), h=horizon, step_size=step, n_windows=n_windows
+    cv_z = _sf(season_length).cross_validation(
+        df=_frame(g, tf), h=horizon, step_size=step, n_windows=n_windows
     )
-    cv = cv.reset_index() if "unique_id" not in cv.columns else cv
-    cv["h"] = ((cv["ds"] - cv["cutoff"]).dt.days // 7).astype(int)
+    cv_z = cv_z.reset_index() if "unique_id" not in cv_z.columns else cv_z
+    cv_z["h"] = ((cv_z["ds"] - cv_z["cutoff"]).dt.days // 7).astype(int)
+    cv = cv_z.copy()
+    for col in ("y", BASELINE, *CANDIDATES):
+        cv[col] = tf.inverse(cv_z[col].to_numpy())
+    # observed truth exactly as stored (avoid round-trip noise through the transform)
+    cv["y"] = g.set_index("ds")["y"].reindex(cv["ds"]).to_numpy()
     first_cutoff = cv["cutoff"].min()
     hist = g.loc[g["ds"] <= first_cutoff, "y"].to_numpy()
     scale = float(np.mean(np.abs(hist[season_length:] - hist[:-season_length])))
@@ -92,7 +121,18 @@ def rolling_origin_backtest(
             "mae_by_horizon": {int(h): float(v) for h, v in by_h.items()},
             "beats_baseline_by_horizon": {int(h): bool(by_h[h] < base_by_h[h]) for h in by_h.index},
         }
-    return Backtest(cv, int(cv["cutoff"].nunique()), horizon, step, scale, metrics)
+    span_weeks = int((cv["ds"].max() - first_cutoff).days // 7)
+    return Backtest(
+        cv,
+        cv_z,
+        int(cv["cutoff"].nunique()),
+        horizon,
+        step,
+        scale,
+        metrics,
+        tf,
+        round(span_weeks / season_length, 2),
+    )
 
 
 def choose_model(bt: Backtest) -> tuple[str, int]:
@@ -148,10 +188,13 @@ def interval_widths(bt: Backtest, model: str) -> dict:
     }
 
 
-def forecast_point(g: pd.DataFrame, model: str, horizon: int, season_length: int) -> pd.DataFrame:
-    fc = _sf(season_length).forecast(df=_frame(g), h=horizon)
+def forecast_point(
+    g: pd.DataFrame, model: str, horizon: int, season_length: int, tf: Transform | None = None
+) -> pd.DataFrame:
+    """Point forecast in the *transformed* space (column ``z``)."""
+    fc = _sf(season_length).forecast(df=_frame(g, tf), h=horizon)
     fc = fc.reset_index() if "unique_id" not in fc.columns else fc
-    return fc[["ds", model]].rename(columns={model: "point"})
+    return fc[["ds", model]].rename(columns={model: "z"})
 
 
 def build_forecast(
@@ -160,31 +203,49 @@ def build_forecast(
     widths: dict,
     horizon: int,
     season_length: int,
-    indicator_type: str,
+    transform: Transform,
     band: bool,
 ) -> dict:
-    pts = forecast_point(g, model, horizon, season_length)
-    upper_cap = 100.0 if indicator_type == "proportion" else None
+    """Forecast with interval ends computed in the transformed space, then back-transformed.
+
+    The result is therefore always inside the kind's valid range (>= 0; <= scale for proportions)
+    and intervals are asymmetric on the original scale (wider upward for counts).
+    """
+    pts = forecast_point(g, model, horizon, season_length, transform)
     rows = []
     for i, r in enumerate(pts.itertuples(index=False), start=1):
-        row = {"h": i, "ds": r.ds.date().isoformat(), "point": _clip(r.point, upper_cap)}
+        row = {"h": i, "ds": r.ds.date().isoformat(), "point": _r(transform.inverse(r.z))}
         if band:
             for lv in LEVELS:
                 w = widths["half_widths"][i][lv]
                 tag = int(lv * 100)
-                row[f"lo{tag}"] = _clip(r.point - w, upper_cap)
-                row[f"hi{tag}"] = _clip(r.point + w, upper_cap)
+                row[f"lo{tag}"] = _r(transform.inverse(r.z - w))
+                row[f"hi{tag}"] = _r(transform.inverse(r.z + w))
         rows.append(row)
     return {
         "origin": g["ds"].iloc[-1].date().isoformat(),
         "model": model,
-        "interval_method": "empirical_abs_error_quantile_per_horizon (split-conformal)",
+        "transform": transform.name,
+        "interval_method": "empirical_abs_error_quantile_per_horizon (split-conformal, "
+        "computed in transformed space)",
         "points": rows,
     }
 
 
-def _clip(x: float, upper: float | None) -> float:
-    x = max(0.0, float(x))
-    if upper is not None:
-        x = min(upper, x)
-    return round(x, 5)
+def _r(x) -> float:
+    return round(float(x), 5)
+
+
+__all__ = [
+    "BASELINE",
+    "CANDIDATES",
+    "FAMILY",
+    "LEVELS",
+    "Backtest",
+    "build_forecast",
+    "choose_model",
+    "for_kind",
+    "interval_widths",
+    "rolling_origin_backtest",
+    "windows_for_seasons",
+]

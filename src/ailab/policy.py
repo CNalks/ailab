@@ -5,16 +5,41 @@ Rules (first match wins):
 2. data-quality failures (< 3 seasons, long gaps, mostly zeros, negatives) -> monitor/history only
 3. backtest impossible                              -> monitor only
 4. best candidate does not beat the seasonal-naive baseline at horizon 1 -> monitor only
-5. otherwise forecast allowed for the leading horizons where it beats the baseline;
+5. kind-specific extra requirements (``KIND_RULES``; proportions are stricter, see below)
+6. otherwise forecast allowed for the leading horizons where it beats the baseline;
    band shown only if leave-one-out 80% coverage >= ``min_band_coverage``.
+
+Proportions are only forecast if they *pass the backtest against seasonal naive* with margin:
+overall MAE at most 95 % of the baseline's, a lead of at least 2 horizons, a backtest that spans
+at least 3 seasons, and a well-calibrated 80 % band (>= 70 % leave-one-out). Counts/rates need the
+basic rules only (warnings are added instead of denials).
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from .forecast import FAMILY, Backtest, choose_model
 from .schema import ForecastPolicy, IndicatorType
 
 MIN_BAND_COVERAGE = 0.6
+MIN_BACKTEST_SEASONS = 3.0
+
+
+@dataclass(frozen=True)
+class KindRule:
+    min_horizons_ok: int  # leading horizons the model must beat the baseline at
+    max_rel_mae: float  # overall MAE / baseline MAE must be below this
+    min_band_coverage: float  # 80 % leave-one-out coverage required for the band
+    deny_on_low_coverage: bool  # deny (True) or withhold only the band (False)
+    deny_on_short_backtest: bool  # backtest spanning < MIN_BACKTEST_SEASONS: deny or warn
+
+
+KIND_RULES: dict[str, KindRule] = {
+    "count": KindRule(1, 1.0, MIN_BAND_COVERAGE, False, False),
+    "rate": KindRule(1, 1.0, MIN_BAND_COVERAGE, False, False),
+    "proportion": KindRule(2, 0.95, 0.70, True, True),
+}
 
 
 def decide(
@@ -52,14 +77,29 @@ def decide(
         return deny("negative_values", "history_only")
     if bt is None:
         return deny("backtest_not_possible")
+    rule = KIND_RULES.get(indicator_type, KIND_RULES["count"])
     model, h_ok = choose_model(bt)
     if h_ok == 0:
         return deny("no_skill_vs_seasonal_naive")
-    horizon = min(h_ok, requested_horizon)
     warnings: list[str] = []
+    rel = bt.metrics[model]["rel_mae_vs_seasonal_naive"]
+    if rel is not None and rel >= rule.max_rel_mae:
+        return deny("no_skill_vs_seasonal_naive")
+    if h_ok < rule.min_horizons_ok:
+        return deny("skill_horizon_too_short")
     cov80 = (calibration or {}).get("80", {}).get("empirical_loo")
+    if bt.seasons_covered < MIN_BACKTEST_SEASONS:
+        if rule.deny_on_short_backtest:
+            return deny("backtest_lt_3_seasons")
+        warnings.append(
+            f"backtest spans only {bt.seasons_covered:.1f} seasons (< {MIN_BACKTEST_SEASONS:.0f}); "
+            "skill and interval calibration are less reliable"
+        )
+    horizon = min(h_ok, requested_horizon)
     mode = "forecast_band"
-    if cov80 is not None and cov80 < MIN_BAND_COVERAGE:
+    if cov80 is not None and cov80 < rule.min_band_coverage:
+        if rule.deny_on_low_coverage:
+            return deny("band_undercoverage_in_backtest")
         mode = "forecast_point_only"
         warnings.append(f"80% band under-covers in backtest ({cov80:.0%}); band withheld")
     if h_ok < requested_horizon:

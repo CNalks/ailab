@@ -43,6 +43,7 @@ def load_fluview_demo(store: SeriesStore, refresh: bool = False) -> dict:
             geography="United States (national)",
             unit=unit,
             indicator_type=itype,
+            value_scale=100 if itype == "proportion" else 1,
             source_id=src.source_id,
             licence=src.licence,
             attribution=src.attribution,
