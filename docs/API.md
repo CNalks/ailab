@@ -1,6 +1,8 @@
 # Service API (`ailab serve`)
 
-OpenAPI/Swagger: `/docs`, schema `/openapi.json`. JSON in/out. Base: `/api/v1`.
+OpenAPI/Swagger: `/docs`, schema `/openapi.json` (committed copy: [openapi.json](openapi.json), regenerate with
+`make openapi`; the e2e suite fails if it is stale). JSON in/out. Base: `/api/v1`. Hands-on walk-through:
+[TUTORIAL.md](TUTORIAL.md). Every operation is exercised by the black-box suite, see [TEST_REPORT.md](TEST_REPORT.md).
 
 | method & path | auth | purpose |
 |---|---|---|
@@ -13,7 +15,7 @@ OpenAPI/Swagger: `/docs`, schema `/openapi.json`. JSON in/out. Base: `/api/v1`.
 | `GET /api/v1/series/{id}/data?start&end&limit&offset` | – | observations (limit 1..5000, default 1000); `/observations` = deprecated alias |
 | `GET /api/v1/series/{id}/quality` | – | data-quality checklist |
 | `GET /api/v1/series/{id}/lineage` | – | derivation, sources, alignment, dependents |
-| `GET /api/v1/series/{id}/forecast?horizon` | – | backtest + policy + forecast (horizon 1..26) |
+| `GET /api/v1/series/{id}/forecast?horizon` | – | backtest + policy + forecast (horizon 1..26); first call takes seconds (backtest), then cached; models see the last 840 weeks only |
 | `GET /api/v1/series/{id}/policy?horizon` | – | policy only |
 | `GET /api/v1/series/{id}/alerts?method&baseline` | – | ad-hoc EARS C1–C3 / CUSUM scan |
 | `GET /api/v1/series/{id}/export?format=csv\|json\|parquet` | – | download one series |
@@ -31,7 +33,7 @@ Reads are open (put a reverse proxy/auth in front before exposing publicly). **E
 endpoint** (create/delete/derive/recompute/rules/export) needs header `X-API-Key: <AILAB_API_KEY>`.
 If `AILAB_API_KEY` is unset the service is **read-only** (writes ⇒ 403); there is no default key;
 a key shorter than 16 characters refuses to start (`openssl rand -hex 24`). Comparison is
-constant-time. Analysis is serialised in-process and cached (64 entries).
+constant-time. Analysis is serialised in-process and cached (64 entries); create/derive/delete/recompute are serialised too, so concurrent creates of one id give exactly one 201.
 
 ## Errors
 Always `{"error": {"code", "message", "request_id", "details"?}}`, also for 404/405/422/500; the
@@ -39,7 +41,8 @@ request id is also in header `X-Request-ID` and the server log. Codes: `bad_requ
 (401), `forbidden` (403, read-only), `not_found`, `conflict`, `has_dependents` (409, with
 `details.dependents`), `payload_too_large` (413), `validation_error` (422, `details` lists
 location/message/type but **never echoes the input**), `invalid_expression`, `alignment_error`
-(422), `internal_error` (500, no traceback or exception text to the client).
+(422), `export_budget_exceeded` (422, `POST /export` size budget), `internal_error` (500, no traceback or exception text to the client).
+Malformed JSON (e.g. invalid UTF-8) may be answered `400 bad_request` instead of 422.
 
 ## Configuration (environment)
 | variable | default | meaning |
