@@ -37,3 +37,33 @@ def test_export_budget_error_is_a_422_not_a_500(monkeypatch, tmp_path):
     c = TestClient(create_app(settings=Settings(api_key=KEY, out_dir=tmp_path, preload_demo=True)))
     r = c.post("/api/v1/export", headers={"X-API-Key": KEY})
     assert r.status_code == 422 and r.json()["error"]["code"] == "export_budget_exceeded"
+
+
+def test_parallel_create_same_id_is_atomic():
+    """check-then-write was not atomic: several parallel POSTs could all answer 201 and the last
+    one silently replaced the others although overwrite=false."""
+    import collections
+    import threading
+
+    c = TestClient(create_app(settings=Settings(api_key=KEY)))
+    n = 16
+    barrier = threading.Barrier(n)
+    out = []
+
+    def post(i):
+        import datetime as dt
+
+        d0 = dt.date(2020, 1, 5)
+        body = {
+            "meta": {"series_id": "race", "name": "n", "indicator_type": "count"},
+            "observations": [
+                {"ds": (d0 + dt.timedelta(weeks=j)).isoformat(), "y": float(i)} for j in range(300)
+            ],
+        }
+        barrier.wait()
+        out.append(c.post("/api/v1/series", json=body, headers={"X-API-Key": KEY}).status_code)
+
+    ts = [threading.Thread(target=post, args=(i,)) for i in range(n)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert collections.Counter(out) == {201: 1, 409: n - 1}, out

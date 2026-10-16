@@ -150,6 +150,7 @@ def create_app(
     if cfg.preload_demo and store.count_series() == 0:
         load_fluview_demo(store, refresh=False)
     started = time.time()
+    write_lock = threading.RLock()  # check-then-write sequences (create/derive/delete) are atomic
     compute_lock = threading.Lock()  # CPU-bound analysis is serialised: predictable memory use
     cache: OrderedDict[tuple, dict] = OrderedDict()
     CACHE_MAX = 64
@@ -332,43 +333,44 @@ def create_app(
         summary="Create a base series (write)",
     )
     def create_series(body: SeriesIn, overwrite: bool = False) -> dict:
-        m = body.meta
-        if "indicator_type" not in m.model_fields_set:
-            raise HTTPException(
-                422, "meta.indicator_type is required (count|proportion|rate|event)"
-            )
-        if m.derived_expr or m.derived_from or m.bindings or m.lineage:
-            raise HTTPException(422, "lineage fields are reserved; use POST /api/v1/derive")
-        if len(body.observations) > cfg.max_observations:
-            raise HTTPException(422, f"at most {cfg.max_observations} observations per series")
-        try:
-            existing = store.get_meta(m.series_id)
-        except KeyError:
-            existing = None
-            if store.count_series() >= cfg.max_series:
-                raise HTTPException(409, f"series limit reached ({cfg.max_series})") from None
-        if existing is not None and (not overwrite or existing.is_derived):
-            raise HTTPException(
-                409,
-                f"series {m.series_id!r} exists"
-                + (
-                    " (derived series cannot be overwritten)"
-                    if existing.is_derived
-                    else "; pass overwrite=true to replace"
-                ),
-            )
-        df = pd.DataFrame([{"ds": o.ds, "y": o.y} for o in body.observations])
-        try:
-            n = store.upsert_series(m, df)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from None
-        cache.clear()
-        return {
-            "series_id": m.series_id,
-            "observations": n,
-            "replaced": existing is not None,
-            "stale_dependents": store.dependents(m.series_id),
-        }
+        with write_lock:
+            m = body.meta
+            if "indicator_type" not in m.model_fields_set:
+                raise HTTPException(
+                    422, "meta.indicator_type is required (count|proportion|rate|event)"
+                )
+            if m.derived_expr or m.derived_from or m.bindings or m.lineage:
+                raise HTTPException(422, "lineage fields are reserved; use POST /api/v1/derive")
+            if len(body.observations) > cfg.max_observations:
+                raise HTTPException(422, f"at most {cfg.max_observations} observations per series")
+            try:
+                existing = store.get_meta(m.series_id)
+            except KeyError:
+                existing = None
+                if store.count_series() >= cfg.max_series:
+                    raise HTTPException(409, f"series limit reached ({cfg.max_series})") from None
+            if existing is not None and (not overwrite or existing.is_derived):
+                raise HTTPException(
+                    409,
+                    f"series {m.series_id!r} exists"
+                    + (
+                        " (derived series cannot be overwritten)"
+                        if existing.is_derived
+                        else "; pass overwrite=true to replace"
+                    ),
+                )
+            df = pd.DataFrame([{"ds": o.ds, "y": o.y} for o in body.observations])
+            try:
+                n = store.upsert_series(m, df)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from None
+            cache.clear()
+            return {
+                "series_id": m.series_id,
+                "observations": n,
+                "replaced": existing is not None,
+                "stale_dependents": store.dependents(m.series_id),
+            }
 
     @r.get("/series/{series_id}", tags=["series"], summary="Series metadata")
     def get_series(series_id: str = SeriesId) -> SeriesMeta:
@@ -384,10 +386,11 @@ def create_app(
         series_id: str = SeriesId,
         cascade: bool = Query(False, description="also delete derived series built from it"),
     ) -> dict:
-        _meta(series_id)
-        ids = store.delete_series(series_id, cascade=cascade)
-        cache.clear()
-        return {"deleted": ids}
+        with write_lock:
+            _meta(series_id)
+            ids = store.delete_series(series_id, cascade=cascade)
+            cache.clear()
+            return {"deleted": ids}
 
     def _data(series_id, start, end, limit, offset) -> dict:
         meta = _meta(series_id)
@@ -510,20 +513,21 @@ def create_app(
     def derive_series(body: DeriveIn) -> dict:
         """Evaluate a safe expression over stored series, infer its kind, align the sources
         (missing stays missing), and store the result with its lineage."""
-        if store.count_series() >= cfg.max_series and not _exists(body.series_id):
-            raise HTTPException(409, f"series limit reached ({cfg.max_series})")
-        d = derive_service.create_derived(
-            store,
-            body.series_id,
-            body.name,
-            body.expr,
-            body.bindings,
-            body.align,
-            body.indicator_type,
-            overwrite=body.overwrite,
-        )
-        cache.clear()
-        return _derivation_out(d, stored=True)
+        with write_lock:
+            if store.count_series() >= cfg.max_series and not _exists(body.series_id):
+                raise HTTPException(409, f"series limit reached ({cfg.max_series})")
+            d = derive_service.create_derived(
+                store,
+                body.series_id,
+                body.name,
+                body.expr,
+                body.bindings,
+                body.align,
+                body.indicator_type,
+                overwrite=body.overwrite,
+            )
+            cache.clear()
+            return _derivation_out(d, stored=True)
 
     def _exists(sid: str) -> bool:
         try:
@@ -567,10 +571,11 @@ def create_app(
         summary="Recompute a derived series from its current sources (write)",
     )
     def recompute(series_id: str = SeriesId) -> dict:
-        _meta(series_id)
-        d = derive_service.recompute(store, series_id)
-        cache.clear()
-        return _derivation_out(d, stored=True)
+        with write_lock:
+            _meta(series_id)
+            d = derive_service.recompute(store, series_id)
+            cache.clear()
+            return _derivation_out(d, stored=True)
 
     # ---- forecast ----------------------------------------------------------------------
     def _analysis(series_id: str, horizon: int) -> dict:
