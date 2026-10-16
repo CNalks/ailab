@@ -31,7 +31,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .. import __version__, alerts, derive, derive_service, quality
 from ..demo import load_fluview_demo
 from ..export import BudgetError, export_site
-from ..pipeline import analyse
+from ..pipeline import analyse, gate_data_only
 from ..schema import SERIES_ID_RE, AlertRule, SeriesMeta
 from ..store import DependencyError, SeriesStore
 from .middleware import (
@@ -447,7 +447,26 @@ def create_app(
 
     @r.get("/series/{series_id}/quality", tags=["series"], summary="Data-quality checklist")
     def series_quality(series_id: str = SeriesId) -> dict:
-        return quality.check_series(_meta(series_id), store.get_observations(series_id))
+        """Checklist + grade, plus `gate`: the gate's data-level (stage 1) verdict and measured
+        metrics (seasonal strength, ADF/KPSS, level shift, outliers, tail check, ...)."""
+        meta = _meta(series_id)
+        raw = store.get_observations(series_id)
+        out = quality.check_series(meta, raw)
+        gd = gate_data_only(meta, raw).to_dict()
+        out["gate"] = {
+            k: gd[k]
+            for k in (
+                "stage",
+                "decision",
+                "confidence",
+                "hard_to_judge",
+                "reason_codes",
+                "reasons",
+                "metrics",
+                "skipped_checks",
+            )
+        }
+        return out
 
     @r.get("/series/{series_id}/lineage", tags=["series", "derive"], summary="Lineage")
     def lineage(series_id: str = SeriesId) -> dict:
@@ -583,12 +602,19 @@ def create_app(
             return _derivation_out(d, stored=True)
 
     # ---- forecast ----------------------------------------------------------------------
-    def _analysis(series_id: str, horizon: int) -> dict:
+    def _as_of(as_of: dt.date | None) -> pd.Timestamp | None:
+        if as_of is not None:
+            return pd.Timestamp(as_of)
+        return pd.Timestamp.now().normalize() if cfg.gate_stale_check else None
+
+    def _analysis(series_id: str, horizon: int, as_of: dt.date | None = None) -> dict:
         meta = _meta(series_id)
         obs = store.get_observations(series_id)
+        today = _as_of(as_of)
         ck = (
             series_id,
             horizon,
+            None if today is None else today.date().isoformat(),
             hashlib.sha1(
                 pd.util.hash_pandas_object(obs, index=False).to_numpy().tobytes()
             ).hexdigest(),
@@ -598,18 +624,30 @@ def create_app(
             with compute_lock:
                 if ck not in cache:
                     cache[ck] = analyse(
-                        store, series_id, horizon=horizon, include_observations=False
+                        store, series_id, horizon=horizon, include_observations=False, today=today
                     )
                     while len(cache) > CACHE_MAX:
                         cache.popitem(last=False)
         return cache[ck]
 
+    AsOf = Query(
+        None,
+        description="Reference date (YYYY-MM-DD) for the gate's stale-data check; by default "
+        "staleness is not judged (historical data) unless AILAB_GATE_STALE_CHECK=1.",
+    )
+
     @r.get(
         "/series/{series_id}/forecast", tags=["forecast"], summary="Backtest + policy + forecast"
     )
-    def forecast(series_id: str = SeriesId, horizon: int = Query(8, ge=1, le=26)) -> dict:
-        """``policy.forecast_allowed=false`` => no forecast values, only the reason."""
-        res = _analysis(series_id, horizon)
+    def forecast(
+        series_id: str = SeriesId,
+        horizon: int = Query(8, ge=1, le=26),
+        as_of: dt.date | None = AsOf,
+    ) -> dict:
+        """Always HTTP 200 for a valid series: a refusal is a normal outcome, not an error.
+        `policy.forecast_allowed=false` => `forecast` is null and `gate.reasons` say why
+        (`gate.decision` is `refused`; `limited` means a forecast with `gate.limits` applied)."""
+        res = _analysis(series_id, horizon, as_of)
         return {
             k: res[k]
             for k in (
@@ -617,15 +655,35 @@ def create_app(
                 "data_through",
                 "quality",
                 "policy",
+                "gate",
                 "backtest",
                 "forecast",
                 "schema_version",
             )
         }
 
-    @r.get("/series/{series_id}/policy", tags=["forecast"], summary="Forecast policy only")
-    def policy(series_id: str = SeriesId, horizon: int = Query(8, ge=1, le=26)) -> dict:
-        return _analysis(series_id, horizon)["policy"]
+    @r.get("/series/{series_id}/policy", tags=["forecast"], summary="Forecast policy + gate")
+    def policy(
+        series_id: str = SeriesId,
+        horizon: int = Query(8, ge=1, le=26),
+        as_of: dt.date | None = AsOf,
+    ) -> dict:
+        res = _analysis(series_id, horizon, as_of)
+        return {**res["policy"], "gate": res["gate"]}
+
+    @r.get(
+        "/series/{series_id}/gate",
+        tags=["forecast"],
+        summary="Forecast quality gate (allowed / limited / refused) with reasons and metrics",
+    )
+    def series_gate(
+        series_id: str = SeriesId,
+        horizon: int = Query(8, ge=1, le=26),
+        as_of: dt.date | None = AsOf,
+    ) -> dict:
+        """Reason codes, severities, en/zh/fr messages, measured metrics, thresholds used and
+        the recommended action. Includes the backtest-based checks (`stage: data+backtest`)."""
+        return _analysis(series_id, horizon, as_of)["gate"]
 
     # ---- alerts ------------------------------------------------------------------------
     @r.get("/alerts/rules", tags=["alerts"], summary="List alert rules")

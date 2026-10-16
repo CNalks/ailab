@@ -69,6 +69,11 @@ def export_site(
                 )
             },
             "quality_grade": res["quality"]["grade"],
+            "gate": {
+                "decision": res["gate"]["decision"],
+                "confidence": res["gate"]["confidence"],
+                "reason_codes": res["gate"]["reason_codes"],
+            },
             "latest_alert_signal": {a["method"]: a["latest_is_signal"] for a in res["alerts"]},
         }
         if parquet:

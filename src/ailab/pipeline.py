@@ -189,6 +189,18 @@ def analyse_frame(
     return result
 
 
+def gate_data_only(
+    meta: SeriesMeta, raw: pd.DataFrame, as_of: pd.Timestamp | None = None
+) -> gate.GateDecision:
+    """Stage-1 gate (data checks only; no model fitting, ~0.1-1 s)."""
+    cfg, src = gate.resolve_thresholds(meta.indicator_type, "W", meta.series_id, meta.gate)
+    g_fit, masked, _ = quality.model_frame(raw, meta, cfg.reporting_lag_weeks, cfg.max_gap)
+    g_model = g_fit.tail(MAX_MODEL_WEEKS).reset_index(drop=True)
+    return gate.assess_data(
+        meta, quality.regularise(raw), g_model, as_of, cfg, src, masked[-MAX_MODEL_WEEKS:]
+    )
+
+
 def raw_aligned(raw: pd.DataFrame):
     """Observed values on the regular grid (interpolated points are *not* shown as observed)."""
     return quality.regularise(raw)["y"].to_numpy()

@@ -105,6 +105,76 @@ def forecast(
     )
 
 
+@app.command("gate")
+def gate_cmd(
+    series_id: str,
+    horizon: int = typer.Option(8, "--h", min=1, max=26),
+    lang: str = typer.Option("en", help="Message language: en | zh | fr"),
+    as_of: str | None = typer.Option(
+        None, "--as-of", help="YYYY-MM-DD or 'today': enables the stale-data check."
+    ),
+    quick: bool = typer.Option(False, "--quick", help="Data checks only (no backtest)."),
+    set_: list[str] | None = typer.Option(
+        None, "--set", help="Threshold override KEY=VALUE for this run (repeatable)."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Full machine-readable decision."),
+    db: Path | None = DB_OPT,
+):
+    """Forecast quality gate: may this series be forecast? (allowed / limited / refused)"""
+    import pandas as pd
+
+    from . import gate as gate_mod
+    from .pipeline import analyse_frame, gate_data_only
+
+    if lang not in gate_mod.msg.LANGS:
+        raise _fail(ValueError(f"--lang must be one of {gate_mod.msg.LANGS}"))
+    store = _store(db)
+    try:
+        meta = store.get_meta(series_id)
+        over = dict(meta.gate)
+        for kv in set_ or []:
+            k, sep, v = kv.partition("=")
+            if not sep:
+                raise ValueError(f"--set must look like KEY=VALUE, got {kv!r}")
+            over[k] = v
+        meta = meta.model_copy(update={"gate": gate_mod.validate_series_overrides(over)})
+        today = (
+            None
+            if as_of is None
+            else pd.Timestamp.now().normalize()
+            if as_of == "today"
+            else pd.Timestamp(as_of)
+        )
+        raw = store.get_observations(series_id)
+        if quick:
+            gd = gate_data_only(meta, raw, today).to_dict()
+        else:
+            gd = analyse_frame(
+                meta, raw, [], horizon=horizon, include_observations=False, today=today
+            )["gate"]
+    except (KeyError, ValueError) as exc:
+        raise _fail(exc) from None
+    if as_json:
+        typer.echo(json.dumps(gd, indent=2, ensure_ascii=False))
+        return
+    color = {"allowed": "green", "limited": "yellow", "refused": "red"}[gd["decision"]]
+    typer.secho(
+        f"{series_id}: {gd['decision'].upper()} (confidence {gd['confidence']}"
+        f"{', hard to judge' if gd['hard_to_judge'] else ''}; stage {gd['stage']})",
+        fg=color,
+        bold=True,
+    )
+    for r in gd["reasons"]:
+        typer.echo(f"  [{r['severity']:<5}] {r['code']}: {r['message'][lang]}")
+    lim = {k: v for k, v in gd["limits"].items() if v not in (None, False, 0, 1.0)}
+    if lim:
+        typer.echo(f"  limits: {lim}")
+    typer.echo(
+        f"  action: {gd['recommended_action']['code']} - {gd['recommended_action']['message'][lang]}"
+    )
+    raise typer.Exit(0 if gd["decision"] != "refused" else 1)
+
+
 @app.command()
 def alert(
     series_id: str,
@@ -150,6 +220,14 @@ def series_add(
     disease: str = typer.Option(""),
     geography: str = typer.Option(""),
     unit: str = typer.Option(""),
+    gate_set: list[str] | None = typer.Option(
+        None,
+        "--gate",
+        help="Per-series gate threshold KEY=VALUE (repeatable), e.g. reporting_lag_weeks=2",
+    ),
+    mask: list[str] | None = typer.Option(
+        None, "--mask", help="Disruption period START:END (YYYY-MM-DD, repeatable), e.g. COVID-19."
+    ),
 ):
     """Import a base series from CSV (kind is required; values are validated against it)."""
     import pandas as pd
@@ -167,6 +245,8 @@ def series_add(
             disease=disease,
             geography=geography,
             unit=unit,
+            gate=dict(kv.split("=", 1) for kv in gate_set or []),
+            mask_periods=[m.split(":", 1) for m in mask or []],
         )
         n = _db(db).upsert_series(meta, df[["ds", "y"]])
     except (ValueError, KeyError) as exc:

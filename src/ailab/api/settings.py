@@ -37,6 +37,7 @@ class Settings:
     max_series: int = 500
     cors_origins: tuple[str, ...] = field(default_factory=tuple)
     log_level: str = "INFO"
+    gate_stale_check: bool = False  # judge data staleness against today's date
 
     def __post_init__(self) -> None:
         if self.api_key is not None and len(self.api_key) < MIN_API_KEY_LEN:
@@ -61,6 +62,13 @@ class Settings:
             "max_series": _int("AILAB_MAX_SERIES", 500, 1, 100_000),
             "cors_origins": origins,
             "log_level": env.get("AILAB_LOG_LEVEL", "INFO").upper(),
+            "gate_stale_check": env.get("AILAB_GATE_STALE_CHECK", "") in ("1", "true", "yes"),
         }
+        from ..gate import GateConfigError, env_overrides
+
+        try:  # fail fast at start-up on a malformed AILAB_GATE_* variable
+            env_overrides()
+        except GateConfigError as exc:
+            raise ConfigError(str(exc)) from None
         base.update({k: v for k, v in overrides.items() if v is not None})
         return cls(**base)
