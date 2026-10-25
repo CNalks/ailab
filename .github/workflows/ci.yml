@@ -43,6 +43,9 @@ jobs:
         working-directory: site
       - run: npm run build
         working-directory: site
+      - name: Decision cards repeat the static data (node --test, no extra deps)
+        run: npm test
+        working-directory: site
       - name: Static output has the three languages and the data
         run: |
           test -s site/dist/index.html && test -s site/dist/en/index.html && test -s site/dist/fr/index.html

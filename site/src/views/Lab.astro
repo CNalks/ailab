@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import HealthBadge from "../components/HealthBadge.astro";
 import SeriesCard from "../components/SeriesCard.astro";
+import DecisionPair from "../components/DecisionPair.astro";
 import { t, type MessageKey } from "../i18n";
 import { formatDate } from "../i18n/format";
 import { htmlLang, type Locale } from "../i18n/config";
@@ -18,6 +19,13 @@ const built = formatDate(locale, man.generated_at.slice(0, 10));
 const lines = (s: string) => s.split("\n");
 const steps = [1, 2, 3, 4] as const;
 const rows = [1, 2, 3, 4, 5, 6] as const;
+const gb = "https://github.com/CNalks/ailab/blob/main";
+const evRows = [
+  { n: 1, docs: "docs/MODEL_POLICY.md#decision-order-first-match-wins", tests: ["tests/test_forecast_policy.py", "tests/test_gate.py"] },
+  { n: 2, docs: "docs/MODEL_POLICY.md#reason-codes", tests: ["tests/test_gate.py"] },
+  { n: 3, docs: "docs/SERIES_KINDS.md", tests: ["tests/test_alignment.py", "tests/test_derive_kinds.py"] },
+  { n: 4, docs: "docs/MODEL_POLICY.md#limited-mode", tests: ["tests/test_gate.py"] }
+] as const;
 const qsDocker = `docker run --rm -p 127.0.0.1:8000:8000 ghcr.io/cnalks/ailab:v0.3.0
 # http://127.0.0.1:8000/docs  ·  /health`;
 const qsPy = `pip install "git+https://github.com/CNalks/ailab@v0.3.0"   # Python 3.12
@@ -43,6 +51,8 @@ const gh = "https://github.com/CNalks/ailab";
       <HealthBadge locale={locale} where="hero" />
     </div>
   </section>
+
+  <DecisionPair locale={locale} />
 
   <section class="block" aria-labelledby="what-title">
     <div class="container">
@@ -123,6 +133,19 @@ const gh = "https://github.com/CNalks/ailab";
           </tbody>
         </table>
       </div>
+      <h3 class="reveal sub-h" id="evidence">{t(locale, "ev.title")}</h3>
+      <div class="scroll reveal" tabindex="0" role="region" aria-labelledby="evidence">
+        <table class="mt">
+          <thead><tr><th scope="col">{t(locale, "ev.claim")}</th><th scope="col">{t(locale, "ev.proof")}</th><th scope="col">{t(locale, "ev.bound")}</th></tr></thead>
+          <tbody>
+            {evRows.map((r) => (
+              <tr><th scope="row">{t(locale, `ev.${r.n}.c` as MessageKey)}</th>
+                <td class="ev"><a href={`${gb}/${r.docs}`}>{r.docs}</a>{r.tests.map((p) => (<><br /><a href={`${gb}/${p}`}>{p}</a></>))}</td>
+                <td>{t(locale, `ev.${r.n}.b` as MessageKey)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -199,6 +222,8 @@ const gh = "https://github.com/CNalks/ailab";
   .mt tbody th { font-weight: 600; width: 16%; }
   .mt td { color: var(--ink-2); }
   .mt tr:last-child > * { border-bottom: 0; }
+  .mt .ev { font-family: var(--font-mono); font-size: 12px; line-height: 1.7; }
+  .mt .ev a { color: var(--accent-ink); }
   .srcs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); margin-top: var(--s-4); }
   .src h3 { font-size: var(--text-base); }
   .pub { color: var(--muted) !important; }

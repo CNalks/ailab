@@ -22,13 +22,21 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 
 National or supra-national aggregates only; no sub-national or community-level data.
 
+## Decision cards (home page, right after the hero)
+Two of the series above are shown side by side as one allowed and one refused gate decision
+(`site/src/components/DecisionPair.astro`): status (text + icon), `forecast_allowed`, `reason`, `reason_codes`, a
+thumbnail drawn by the same `buildChart` code (no forecast geometry for a refusal, missing weeks stay gaps), a
+reproduce command and anchors to the full card. Every value is read from `site/public/data` at build time;
+`site/src/lib/decision.ts` fails the build if `manifest.json` and `series/<id>.json` disagree or a card's role no
+longer matches the gate, and `npm test` (after the build) checks the rendered HTML in all three languages.
+
 ## Refresh data
 ```bash
 # 1. update the snapshots in site/data-src/ (see provenance.json for the exact request URLs and filters)
 # 2. recompute
 uv run python scripts/build_showcase_data.py      # -> site/public/data (fails if the size budget is exceeded)
 # 3. build
-cd site && npm ci && npm run build               # -> site/dist
+cd site && npm ci && npm run build && npm test   # -> site/dist + decision-card checks
 ```
 
 ## Deploy (static files only)
