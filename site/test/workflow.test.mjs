@@ -1,4 +1,4 @@
-// Post-build checks for the "pick a series, run the gate" walkthrough (run after `npm run build`: `npm test`).
+// Post-build checks for the forecast-first walkthrough (run after `npm run build`: `npm test`).
 // Every run must repeat site/public/data verbatim in all three languages; nothing is mocked.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ function section(html) {
   return m[0];
 }
 function runs(sec) {
-  return [...sec.matchAll(/<article class="run" data-series="([^"]+)" data-decision="([^"]+)">([\s\S]*?)<\/article>/g)].map((m) => {
+  return [...sec.matchAll(/<article class="run[^"]*" data-series="([^"]+)" data-decision="([^"]+)">([\s\S]*?)<\/article>/g)].map((m) => {
     const steps = [...m[3].matchAll(/<li data-state="([^"]+)"><h4>([^<]*)<\/h4><b[^>]*>([^<]*)<\/b><div class="bd">([\s\S]*?)<\/div><\/li>/g)]
       .map((s) => ({ state: s[1], title: s[2], chip: s[3], body: s[4] }));
     return { id: m[1], decision: m[2], body: m[3], steps };
@@ -39,8 +39,9 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
 
   test(`${locale}: one run per real series, decisions match manifest and series/<id>.json`, () => {
     assert.deepEqual(found.map((r) => r.id).sort(), manifest.series.map((s) => s.series_id).sort());
-    const radios = [...sec.matchAll(/<input type="radio" name="wf-s" value="([^"]+)">/g)].map((m) => m[1]);
+    const radios = [...sec.matchAll(/<input type="radio" name="wf-s" value="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(radios, found.map((r) => r.id), "one radio per run, same order");
+    assert.match(sec, /<input type="radio" name="wf-s" value="[^"]+" checked/);
     for (const r of found) {
       const s = json(`series/${r.id}.json`);
       const m = manifest.series.find((x) => x.series_id === r.id);
@@ -53,19 +54,22 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
       assert.ok(r.body.includes(`<code>reason_codes: [${s.gate.reason_codes.join(", ")}]</code>`));
       assert.deepEqual(m.gate.reason_codes, s.gate.reason_codes);
       assert.ok(r.body.includes(`href="#s-${r.id}"`) && html.includes(`id="s-${r.id}"`), "anchor to the full card");
+      assert.ok(r.body.includes('<svg class="chart'), `${r.id}: chart is primary`);
+      assert.ok(r.body.includes('class="badge"') || r.body.includes('class="badge" data-gate'), `${r.id}: decision badge`);
+      assert.match(r.body, new RegExp(`data-gate="${r.decision}"`));
     }
     for (const d of ["allowed", "refused"]) assert.ok(found.some((r) => r.decision === d), `a ${d} run is offered`);
   });
 
-  test(`${locale}: the four steps are derived from the recorded gate result`, () => {
+  test(`${locale}: basis details hold the four steps derived from the gate result`, () => {
     const sev = (rs) => (rs.some((x) => x.severity === "block") ? "block" : rs.some((x) => x.severity === "limit") ? "limit" : rs.some((x) => x.severity === "warn") ? "warn" : "pass");
     for (const r of found) {
       const s = json(`series/${r.id}.json`);
+      assert.ok(r.body.includes('<details class="basis">'), `${r.id}: evidence in details`);
       assert.equal(r.steps.length, 4, `${r.id}: four steps`);
       const [load, checks, bt, dec] = r.steps;
       assert.equal(load.state, "pass");
       assert.ok(strip(load.body).includes(String(s.quality.n_weeks)), "week count shown");
-      // every reason sits in exactly one step, with its code, severity and the message in this language
       for (const g of s.gate.reasons) {
         const step = BACKTEST_CODES.has(g.code) ? bt : checks;
         const other = BACKTEST_CODES.has(g.code) ? checks : bt;
@@ -84,15 +88,15 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     }
   });
 
-  test(`${locale}: accessible controls and a no-JS fallback`, () => {
+  test(`${locale}: instant select, no run button, accessible no-JS fallback`, () => {
     assert.match(sec, /<form class="wf-form" novalidate>/);
-    assert.match(sec, /<fieldset> <legend>[^<]+<\/legend>/);
-    assert.match(sec, /<button type="submit">[^<]+<\/button>/);
+    assert.match(sec, /<fieldset>[\s\S]*?<legend>[^<]+<\/legend>/);
+    assert.ok(!/<button type="submit">/.test(sec), "no mandatory run CTA");
     assert.match(sec, /role="status" aria-live="polite"/);
+    assert.match(sec, /data-picked="/);
     assert.match(sec, /<noscript><p class="wf-note">[^<]+<\/p><\/noscript>/);
     assert.match(html, /<script>document\.documentElement\.classList\.add\("wf-js"\)<\/script>/, "class set before the runs render");
-    for (const k of ["data-need", "data-step", "data-done"]) assert.match(sec, new RegExp(`${k}="[^"]+"`));
-    // runs are visible unless the script ran (CSS keys on html.wf-js)
+    assert.match(sec, /<details class="repro">/, "CLI reproduce is secondary");
     const css = fs.readdirSync(path.join(dist, "_astro")).filter((f) => f.endsWith(".css")).map((f) => read(path.join(dist, "_astro", f))).join("");
     assert.match(css, /\.wf-form\{display:none[;}]/);
     assert.match(css, /\.wf-js \.wf-form\{display:block\}/);

@@ -4,54 +4,56 @@ import type { SeriesResult } from "../lib/data";
 import { htmlLang, type Locale } from "../i18n/config";
 import { t } from "../i18n";
 
-interface Props { res: SeriesResult; locale: Locale; name: string; gateLabel: string }
-const { res, locale, name, gateLabel } = Astro.props;
+interface Props {
+  res: SeriesResult;
+  locale: Locale;
+  name: string;
+  gateLabel: string;
+  /** Compact walkthrough chart: fewer weeks, no signal lanes, one SVG. */
+  compact?: boolean;
+}
+const { res, locale, name, gateLabel, compact = false } = Astro.props;
 const lang = htmlLang[locale];
-const wide = buildChart(res, { w: 720, h: 300, weeks: 156, locale: lang, yearStep: 1 });
-const narrow = buildChart(res, { w: 360, h: 280, weeks: 104, locale: lang, yearStep: 1 });
+const src = compact ? { ...res, alerts: [] } : res;
+const c = buildChart(src, {
+  w: compact ? 640 : 720,
+  h: compact ? 220 : 300,
+  weeks: compact ? 104 : 156,
+  locale: lang,
+  yearStep: 1
+});
 const alt = t(locale, "chart.alt", { name, through: res.data_through, gate: gateLabel });
-const variants = [
-  { key: "w", c: wide },
-  { key: "n", c: narrow }
-];
 ---
 
-{variants.map(({ key, c }) => (
-  <svg class={`chart ${key}`} viewBox={`0 0 ${c.w} ${c.h}`} role="img" aria-label={alt} focusable="false">
-    <title>{alt}</title>
-    <g class="grid">
-      {c.yTicks.map((y) => (<line x1={c.plot.l} x2={c.plot.r} y1={y.y} y2={y.y} />))}
-    </g>
-    <g class="ylab">
-      {c.yTicks.map((y) => (<text x={c.plot.l - 6} y={y.y + 4} text-anchor="end">{y.label}</text>))}
-    </g>
-    <g class="xlab">
-      {c.xTicks.map((x) => (<text x={x.x} y={c.plot.b + 14} text-anchor="middle">{x.label}</text>))}
-    </g>
-    {c.band95 && <path class="b95" d={c.band95} />}
-    {c.band80 && <path class="b80" d={c.band80} />}
-    {c.hist && <path class="hist" d={c.hist} />}
-    {c.dots.map((d) => (<circle class="dot" cx={d.x} cy={d.y} r="2.4" />))}
-    {c.fc && <path class="fc" d={c.fc} />}
-    {c.last && <circle class="last" cx={c.last.x} cy={c.last.y} r="3.4" />}
-    <g class="lanes">
-      {c.lanes.map((l) => (
-        <g>
-          <text x={c.plot.l - 6} y={l.y + 3} text-anchor="end">{l.label}</text>
-          {l.xs.map((x) => (<line x1={x} x2={x} y1={l.y - 3} y2={l.y + 3} />))}
-        </g>
-      ))}
-    </g>
-  </svg>
-))}
+<svg class:list={["chart", compact && "compact"]} viewBox={`0 0 ${c.w} ${c.h}`} role="img" aria-label={alt} focusable="false">
+  <title>{alt}</title>
+  <g class="grid">
+    {c.yTicks.map((y) => (<line x1={c.plot.l} x2={c.plot.r} y1={y.y} y2={y.y} />))}
+  </g>
+  <g class="ylab">
+    {c.yTicks.map((y) => (<text x={c.plot.l - 6} y={y.y + 4} text-anchor="end">{y.label}</text>))}
+  </g>
+  <g class="xlab">
+    {c.xTicks.map((x) => (<text x={x.x} y={c.plot.b + 14} text-anchor="middle">{x.label}</text>))}
+  </g>
+  {c.band95 && <path class="b95" d={c.band95} />}
+  {c.band80 && <path class="b80" d={c.band80} />}
+  {c.hist && <path class="hist" d={c.hist} />}
+  {c.dots.map((d) => (<circle class="dot" cx={d.x} cy={d.y} r="2.4" />))}
+  {c.fc && <path class="fc" d={c.fc} />}
+  {c.last && <circle class="last" cx={c.last.x} cy={c.last.y} r="3.4" />}
+  <g class="lanes">
+    {c.lanes.map((l) => (
+      <g>
+        <text x={c.plot.l - 6} y={l.y + 3} text-anchor="end">{l.label}</text>
+        {l.xs.map((x) => (<line x1={x} x2={x} y1={l.y - 3} y2={l.y + 3} />))}
+      </g>
+    ))}
+  </g>
+</svg>
 
 <style>
   .chart { width: 100%; height: auto; overflow: visible; }
-  .chart.n { display: none; }
-  @media (max-width: 560px) {
-    .chart.w { display: none; }
-    .chart.n { display: block; }
-  }
   .grid line { stroke: var(--line); stroke-width: 1; }
   .ylab text, .xlab text { fill: var(--muted); font-size: 11px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
   .hist { fill: none; stroke: var(--data); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }

@@ -22,17 +22,16 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 
 National or supra-national aggregates only; no sub-national or community-level data.
 
-## Check walkthrough (home page, right after the hero)
-"Pick a series, walk through the checks" (`site/src/components/SequenceWorkflow.astro`): the visitor picks one of the real series
-and runs it; the page then reveals, step by step, the result the engine recorded at build time — load data → data
-checks → rolling-origin backtest → decision (allowed / limited / refused, `forecast_allowed`, `reason`, `reason_codes`,
-the trilingual reason messages and the recommended action). Nothing is computed in the browser and nothing is mocked:
-the script only reveals pre-rendered steps (aria `role=status` announcements, `aria-busy`, `aria-current=step`; native
-radio + button, keyboard only works; instant under `prefers-reduced-motion`). Without JavaScript every series' full run
-is listed. `site/src/lib/workflow.ts` fails the build if `manifest.json` and `series/<id>.json` disagree, a reason code
-is unknown, the reasons do not imply the recorded decision, or a backtest ran although a data check blocked. After the
-build, `npm test` checks the rendered HTML of all three languages against the data, the dictionaries (same keys and
-placeholders, no untranslated Chinese in en / fr) and the home-page HTML budget (≤ 15,000 B over the main build).
+## Forecast walkthrough (home page, right after the hero)
+"Pick a series, see the forecast" (`site/src/components/SequenceWorkflow.astro`): the visitor picks one of the real series
+and **immediately** sees the history chart (plus forecast bands when allowed/limited) with a one-line decision badge.
+Data checks and the rolling-origin backtest sit in a collapsed “Basis” details (not the hero). Reproduce CLI is under a
+secondary details. Nothing is computed in the browser and nothing is mocked: values are pre-rendered from
+`site/public/data`. Native radios; `role=status` announces the selection; without JavaScript every series’ chart and
+verdict are listed. `site/src/lib/workflow.ts` fails the build if `manifest.json` and `series/<id>.json` disagree, a
+reason code is unknown, the reasons do not imply the recorded decision, or a backtest ran although a data check blocked.
+After the build, `npm test` checks the rendered HTML of all three languages against the data, the dictionaries (same
+keys and placeholders, no untranslated Chinese in en / fr) and the home-page HTML budget (≤ 15,000 B over the main build).
 
 ## Refresh data
 ```bash
