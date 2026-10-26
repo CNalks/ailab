@@ -26,7 +26,7 @@ export const en: Record<MessageKey, string> = {
 
   "hero.kicker": "ailab · v0.3.0",
   "hero.verse": "",
-  "hero.title": "Forecast when it’s honest.\nRefuse when it isn’t.",
+  "hero.title": "One swallow does not make a summer.",
   "hero.sub": "ailab is an open-source time-series engine for infectious-disease surveillance. Every forecast has to beat a seasonal baseline in a rolling backtest; if it can’t, the quality gate tells you why it won’t forecast.",
   "hero.cta1": "Run a forecast",
   "hero.cta2": "View on GitHub",

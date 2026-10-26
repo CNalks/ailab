@@ -26,7 +26,7 @@ export const fr: Record<MessageKey, string> = {
 
   "hero.kicker": "ailab · v0.3.0",
   "hero.verse": "",
-  "hero.title": "Prévoir quand c’est honnête.\nRefuser quand ça ne l’est pas.",
+  "hero.title": "Une hirondelle ne fait pas le printemps.",
   "hero.sub": "ailab est un moteur open source de séries temporelles pour la surveillance des maladies infectieuses. Chaque prévision doit battre une référence saisonnière lors d’un rétro-test glissant ; sinon, la porte qualité explique pourquoi elle ne prévoit pas.",
   "hero.cta1": "Faire une prévision",
   "hero.cta2": "Voir sur GitHub",
