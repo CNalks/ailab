@@ -28,7 +28,12 @@ National or supra-national aggregates only; no sub-national or community-level d
 1. **Choose the series**: one radio row per real series (name, geography, weekly, length, publisher). No outcome is shown here.
 2. **Data overview**: time span, frequency, length (≈ seasons), latest value, last-52-week range, missing weeks and longest gap,
    seasonality (`gate.metrics.seasonal_strength` against `thresholds.min_seasonal_strength`) and the history chart; then the
-   data check-up findings in plain words (the data-stage `gate.reasons`).
+   data check-up findings in plain words (the data-stage `gate.reasons`). If a series has **no selectable method** (all
+   red, derived at build time — today EU/EEA and Malta, the refused series), the walkthrough stops here: a red
+   conclusion "This series is not suitable for forecasting" with the plain-language reasons from the recorded gate
+   metrics (Malta: 51 weeks ≈ 1 season < 3 and 80% missing / 39-week gap; EU/EEA: backtest covers 2.3 seasons < 3),
+   the collapsed **Basis and limits**, and only a "Pick another series" button. Steps ③ and ④ are greyed out in the
+   stepper and their markup is not rendered for that series.
 3. **Choose a method**: every forecasting method the repository has, each with a state derived at build time from the
    series JSON (`workflow.ts`):
    * **recommended** (pre-selected): `backtest.chosen_model`; the build fails unless it is the lowest-MAE candidate and
@@ -37,26 +42,27 @@ National or supra-national aggregates only; no sub-national or community-level d
      BASELINE + CANDIDATES: SeasonalNaive, Naive, MSTL, AutoTheta) with MAE, bar and the reason (error vs the
      recommendation, did not beat the baseline, baseline for comparison). Clicking one shows a small toast
      ("Demo mode: please choose the recommended method", `aria-live`) and keeps the recommendation;
-   * **red, unavailable** (disabled): seasonal ETS on every series ("statsforecast does not fit a seasonal ETS at weekly
-     period 52", forecast.py / METHODS.md, checked against `series.season_length`); all production models on refused
-     series, with the reason from the recorded gate metrics: EU/EEA `insufficient_backtest` (seasons covered vs
-     `backtest_seasons_block`), Malta `too_short` / `too_many_gaps` (+ "less than one season" for seasonal naive);
-   * red, one card each, in every series' list: the methods tried in `benchmarks/forecast_bench.py` but not production
+   * **red, unavailable** (disabled), collapsed in one `<details>` "Unavailable methods (N)" below the open cards, each
+     still a card with its reason: seasonal ETS ("statsforecast does not fit a seasonal ETS at weekly
+     period 52", forecast.py / METHODS.md, checked against `series.season_length`);
+   * red, one card each, in the same collapsed block: the methods tried in `benchmarks/forecast_bench.py` but not production
      candidates (SWA3, MSTL+AutoARIMA, ensembles MSTL+Theta, MSTL+Theta+SWA3, MSTL+Theta+Naive). `src/lib/bench.ts`
      recomputes, at build time from the committed `benchmarks/results/forecast.json`, each method's MAE relative to
      seasonal naive (geometric mean over seeds) pooled over all unmasked scenarios and on the COVID-like scenario, next to
      the current selection rule; for the two US ILINet series (same bundled FluView fixture as `real_wili` /
-     `real_num_ili`) the per-series figure is shown too. The cards are rendered once and moved into the active list by
-     JS; without JS they are listed after the series.
+     `real_num_ili`) the per-series figure is shown too. The cards are rendered once and moved into the active series'
+     collapsed block by JS (the count in its summary is updated); without JS they are a separate collapsed block after
+     the series.
    Amber cards carry no tag; "recommended" and "unavailable" do.
    The build fails if `backtest.models` differs from the production set.
-4. **Result**: the decision badge (allowed / limited / refused), the forecast band, the first and last forecast week with
+4. **Result** (only series with a recommended method): the decision badge (allowed / limited), the forecast band, the first and last forecast week with
    the 80% band, the outcome line, and the collapsed **Basis and limits** (the four recorded steps). The static site only
    publishes the forecast of the recommended method (hence the demo-mode lock). Showing every method's own forecast would need the export to write per-model `forecast` points
    and interval widths (`interval_widths(bt, model)` per candidate).
 
 A stepper and Back buttons move between steps; choosing another series resets to step 1 and the recommended method.
-Without JavaScript every series is listed with its overview, methods and result (step 1 and the buttons are hidden).
+Without JavaScript every series is listed with its overview, methods and result (step 1 and the buttons are hidden);
+stopped series show only the overview, the red conclusion and Basis and limits.
 Reproduce (CLI / `jq`) is secondary. `npm test` checks fidelity to the JSON, i18n, and the ≤ +15 KB HTML budget vs main.
 `SeriesChart` styles are global (prefixed `.chart`) so SVG nodes carry no `data-astro-cid` attribute, and history paths use
 relative `l` steps between the same 0.1-rounded points (identical geometry, fewer bytes).

@@ -4,6 +4,7 @@
 // site/public/data; workflow.ts fails the build on inconsistent artefacts or a recommendation that is not the
 // lowest-error candidate. Only the recommended method has a published forecast; other methods show backtest scores.
 import SeriesChart from "./SeriesChart.astro";
+import Basis from "./WfBasis.astro";
 import { runs, type StepState, type Why } from "../lib/workflow";
 import { bench, BENCH_SCENARIO } from "../lib/bench";
 import { sources } from "../lib/data";
@@ -72,12 +73,12 @@ const items = runs().map((r) => {
     ],
     cap: k(r.forecastAllowed ? "wf.o.chart.f" : "wf.o.chart", { n: Math.min(WEEKS, q.n_weeks) }),
     mlead: bt ? k("wf.m.lead", { n: bt.n_windows, h: bt.horizon }) : "",
-    mnote: r.decision === "limited" ? k("wf.m.limit", { h: lim ?? "–", infl: formatNumber(locale, g.limits.interval_inflation, 2) })
-      : r.decision === "refused" ? k("wf.m.none")
-      : "",
-    go4: r.forecastAllowed ? k("wf.run.h", { h: horizon }) : k("wf.see"),
+    mnote: r.decision === "limited" ? k("wf.m.limit", { h: lim ?? "–", infl: formatNumber(locale, g.limits.interval_inflation, 2) }) : "",
+    // no selectable method at all -> stopped at step ②, with the series-level reasons (derived, not hard-coded)
+    stop: r.methods.every((m) => m.state === "na"),
+    stopWhy: (r.methods.find((m) => m.id !== "SeasonalNaive")?.why ?? []).map(whyText),
+    go4: k("wf.run.h", { h: horizon }),
     pts: pts.length ? [pt(pts[0]), ...(pts.length > 1 ? [pt(pts[pts.length - 1])] : [])] : [],
-    blocks: g.reasons.filter((x) => x.severity === "block"),
     s1: k("wf.s1.d", { n: q.n_weeks, from: formatDate(locale, q.data_from), to: formatDate(locale, q.data_through), miss: q.n_missing }),
     s3: bt ? k("wf.s3.d", { n: bt.n_windows, seasons: formatNumber(locale, bt.seasons_covered, 1) }) : "",
     skill: r.skill
@@ -89,6 +90,7 @@ const items = runs().map((r) => {
 });
 const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
 const B = bench();
+const [nagPre, nagPost] = k("wf.m.nag", { n: "\u0000" }).split("\u0000");
 const x2 = (v: number) => formatNumber(locale, v, 2);
 const benchCards = B.methods.map((m) => ({
   id: m.id, name: k(`wf.m.x.${m.id}`),
@@ -121,7 +123,7 @@ const benchCards = B.methods.map((m) => ({
     </div>
 
     {items.map((r, i) => (
-      <article class:list={["run", i === 0 && "on"]} data-series={r.id} data-decision={r.decision} data-rec={r.rec ?? ""} data-name={r.name} data-dec={r.dec}>
+      <article class:list={["run", i === 0 && "on"]} data-series={r.id} data-decision={r.decision} data-rec={r.rec ?? ""} data-name={r.name} data-dec={r.dec} data-stop={r.stop ? "" : undefined}>
         <header class="head">
           <h3>{r.name}</h3>
           <span class="badge" data-gate={r.decision}>
@@ -154,8 +156,18 @@ const benchCards = B.methods.map((m) => ({
           {r.data.reasons.length === 0 ? <p class="ok">{k("wf.o.ok")}</p> : (
             <ul class="fd">{r.data.reasons.map((x) => <li data-sev={x.severity}><b>{r.sev(x.severity)}</b>{x.message[mk]}</li>)}</ul>
           )}
-          <div class="nav js"><button type="button" data-to="1">{k("wf.prev")}</button><button type="button" class="pri" data-to="3">{k("wf.go3")}</button></div>
+          {r.stop ? (
+            <>
+              <div class="stop"><h5>{k("wf.stop.t")}</h5><ul>{r.stopWhy.map((x) => <li>{x}</li>)}</ul></div>
+              <Basis r={r} locale={locale} />
+              <div class="nav js"><button type="button" class="pri" data-to="1">{k("wf.reset")}</button></div>
+            </>
+          ) : (
+            <div class="nav js"><button type="button" data-to="1">{k("wf.prev")}</button><button type="button" class="pri" data-to="3">{k("wf.go3")}</button></div>
+          )}
         </div>
+
+        {!r.stop && <>
 
         <div class="pn p3">
           <h4 class="ph" tabindex="-1">③ {k("wf.p3.t")}</h4>
@@ -163,7 +175,7 @@ const benchCards = B.methods.map((m) => ({
           {r.mnote && <p class="mn" data-dec={r.decision}>{r.mnote}</p>}
           <fieldset class="ms">
             <legend class="vh">{k("wf.p3.t")}</legend>
-            {r.methods.map((m) => (
+            {r.methods.filter((m) => m.state !== "na").map((m) => (
               <label class:list={["mc", m.state, m.baseline && "base"]}>
                 <input type="radio" name={`wf-m-${r.id}`} value={m.id} checked={m.recommended} disabled={m.state === "na"} aria-disabled={m.state === "alt" ? "true" : undefined} />
                 <span class="mt"><b>{m.name}</b>{m.state !== "alt" && <em>{k(`wf.m.${m.state}`)}</em>}</span>
@@ -173,6 +185,21 @@ const benchCards = B.methods.map((m) => ({
                 {m.why && <span class="mw">{m.why}</span>}
               </label>
             ))}
+            <details class="nax">
+              <summary>{nagPre}<span data-n>{r.methods.filter((m) => m.state === "na").length}</span>{nagPost}</summary>
+              <div class="nag">
+            {r.methods.filter((m) => m.state === "na").map((m) => (
+              <label class:list={["mc", m.state, m.baseline && "base"]}>
+                <input type="radio" name={`wf-m-${r.id}`} value={m.id} checked={m.recommended} disabled={m.state === "na"} aria-disabled={m.state === "alt" ? "true" : undefined} />
+                <span class="mt"><b>{m.name}</b>{m.state !== "alt" && <em>{k(`wf.m.${m.state}`)}</em>}</span>
+                {m.desc && <span class="md">{m.desc}</span>}
+                {m.mae && <span class="bar"><i style={`width:${m.w}%`}></i></span>}
+                {m.mae && <span class="mv">{m.mae}{m.vs && ` · ${m.vs}`}</span>}
+                {m.why && <span class="mw">{m.why}</span>}
+              </label>
+            ))}
+              </div>
+            </details>
           </fieldset>
           <div class="nav js"><button type="button" data-to="2">{k("wf.prev")}</button><button type="button" class="pri" data-to="4">{r.go4}</button></div>
         </div>
@@ -184,41 +211,18 @@ const benchCards = B.methods.map((m) => ({
 
         <div class="pn p4">
           {r.pts.length > 0 && <ul class="pts fcl">{r.pts.map((x) => <li>{x}</li>)}</ul>}
-          {!r.forecastAllowed && (
-            <div class="nofc"><h5>{k("wf.r.why")}</h5><ul class="fd">{r.blocks.map((x) => <li data-sev="block">{x.message[mk]}</li>)}</ul></div>
-          )}
           <p class="out">{r.outcome}{r.act && <> · {k("wf.act")}: {r.act}</>}</p>
-          <details class="basis">
-            <summary>{k("wf.basis")}</summary>
-            <ol class="steps">
-              <li data-state="pass"><h4>{k("wf.s1")}</h4><b>{st("pass")}</b><div class="bd">{r.s1}</div></li>
-              <li data-state={r.data.state}><h4>{k("wf.s2")}</h4><b>{st(r.data.state)}</b><div class="bd">
-                {r.data.reasons.length === 0 ? k("wf.none") : (
-                  <ul>{r.data.reasons.map((x) => <li><code>{x.code}</code> <i>{x.severity}</i></li>)}</ul>
-                )}
-              </div></li>
-              <li data-state={r.backtest.state}><h4>{k("wf.s3")}</h4><b>{st(r.backtest.state)}</b><div class="bd">
-                {r.backtest.state === "skip" ? k("wf.s3.skip") : (
-                  <>
-                    <p>{r.s3}</p>
-                    <p>{r.skill || k("wf.s3.nomodel")}</p>
-                    {r.backtest.reasons.length > 0 && <ul>{r.backtest.reasons.map((x) => <li><code>{x.code}</code> <i>{x.severity}</i> {x.message[mk]}</li>)}</ul>}
-                  </>
-                )}
-              </div></li>
-              <li data-state={r.decision}><h4>{k("wf.s4")}</h4><b class="dec">{r.dec}</b><div class="bd">
-                <p class="pol"><code>forecast_allowed: {String(r.forecastAllowed)}</code> <code>reason: {r.reason}</code> <code>reason_codes: [{r.reasonCodes.join(", ")}]</code></p>
-              </div></li>
-            </ol>
-          </details>
+          <Basis r={r} locale={locale} />
           <p class="go"><a href={`#s-${r.id}`}>{k("wf.goto")} ↓</a></p>
           <div class="nav js"><button type="button" data-to="3">{k("wf.prev")}</button><button type="button" data-to="1">{k("wf.reset")}</button></div>
         </div>
+        </>}
       </article>
     ))}
 
-    <div class="bx" data-wf-x>
-      <h5 class="nj">{k("wf.bx.t")}</h5>
+    <details class="bx nax">
+      <summary>{k("wf.bx.t")}</summary>
+      <div class="nag" data-wf-x>
       {benchCards.map((m) => (
         <label class="mc na bench">
           <input type="radio" name="wf-m-x" value={m.id} disabled />
@@ -228,7 +232,8 @@ const benchCards = B.methods.map((m) => ({
           <span class="mw bs js" data-for="">{k("wf.bx.none")}</span>
         </label>
       ))}
-    </div>
+      </div>
+    </details>
     <div class="wf-toast js" role="status" aria-live="assertive" data-wf-toast hidden></div>
 
     <details class="repro">
@@ -266,14 +271,16 @@ const benchCards = B.methods.map((m) => ({
       const r = run();
       runs.forEach((x) => x.classList.toggle("on", x === r));
       root.dataset.step = String(step);
-      r.querySelector(".p3 .ms")!.append(shared);
+      const nax = r.querySelector<HTMLDetailsElement>(".p3 .nax");
+      nax?.querySelector(".nag")!.append(shared);
+      if (nax) nax.querySelector("[data-n]")!.textContent = String(nax.querySelectorAll(".mc").length);
       shared.querySelectorAll<HTMLElement>("[data-for]").forEach((l) => {
         const own = l.dataset.for === sid;
         l.hidden = l.dataset.for ? !own : !!shared.querySelector(`[data-for="${sid}"]`);
       });
       nav.forEach((b) => {
         const n = Number(b.dataset.go);
-        b.disabled = n > reached;
+        b.disabled = n > reached || (r.dataset.stop !== undefined && n > 2);
         if (n === step) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
       });
       status.textContent = step === 4
@@ -297,6 +304,7 @@ const benchCards = B.methods.map((m) => ({
       if (el.name !== "wf-s") return;
       sid = el.value;
       reached = 1;
+      root.querySelectorAll<HTMLDetailsElement>(".nax").forEach((d) => (d.open = false));
       render(false);
     });
     root.addEventListener("click", (e) => {
@@ -387,10 +395,16 @@ const benchCards = B.methods.map((m) => ({
   .wf .mc.na b { color: var(--ink-2); }
   .wf .mc.na .bar i { opacity: 0.35; }
   .wf .bs { display: block; }
-  .wf .bx { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--s-3); margin-top: var(--s-4); }
-  .wf .bx .nj { grid-column: 1 / -1; margin: 0; }
-  .wf-js .wf .bx { display: contents; }
-  .wf-js .wf .nj, .wf [data-for][hidden] { display: none; }
+  .wf .nax { grid-column: 1 / -1; border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 0 14px; }
+  .wf .nax > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: var(--text-sm); font-weight: 600; color: var(--wf-r); }
+  .wf .nax[open] { padding-bottom: 14px; }
+  .wf .nax > summary::before { content: "▸"; margin-right: 6px; }
+  .wf .nax[open] > summary::before { content: "▾"; }
+  .wf .nag { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: var(--s-3); }
+  .wf .bx { margin-top: var(--s-4); }
+  .wf-js .wf .bx { display: none; }
+  .wf-js .wf .nag .nag { display: contents; }
+  .wf [data-for][hidden] { display: none; }
   .wf-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(92vw, 420px); padding: 10px 16px; border-radius: var(--radius); background: var(--ink); color: var(--bg); font-size: var(--text-sm); font-weight: 600; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
   .wf-toast[hidden] { display: none; }
   .wf .bar { display: block; height: 8px; margin-top: 4px; border-radius: 4px; background: var(--panel); }
@@ -399,7 +413,9 @@ const benchCards = B.methods.map((m) => ({
   .wf .base .bar i { background: var(--muted); }
   .wf .mv { font-variant-numeric: tabular-nums; color: var(--ink); }
   .wf .rm { margin-top: var(--s-2); font-size: var(--text-sm); color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
-  .wf .nofc { margin-top: var(--s-3); }
+  .wf .stop { margin-top: var(--s-4); padding: 12px 14px; border: 1px solid var(--wf-r); border-radius: var(--radius); color: var(--wf-r); font-size: var(--text-sm); }
+  .wf .stop h5 { margin: 0; font-size: var(--text-base); color: var(--wf-r); }
+  .wf .stop ul { margin: 6px 0 0; padding-left: 1.2em; }
   .wf i { color: var(--muted); font-size: var(--text-xs); font-style: normal; font-weight: 400; }
   .wf .basis, .wf .repro { margin-top: var(--s-4); }
   .wf .basis summary, .wf .repro summary { cursor: pointer; color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; min-height: 32px; display: inline-flex; align-items: center; }

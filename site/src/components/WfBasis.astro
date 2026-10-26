@@ -1,0 +1,36 @@
+---
+// "Basis and limits" (collapsed) for one walkthrough run: the four recorded steps of the gate result.
+import { msgKey, type Locale } from "../i18n/config";
+import { t, type MessageKey } from "../i18n";
+import type { Run, StepState } from "../lib/workflow";
+
+type R = Pick<Run, "backtest" | "data" | "decision" | "forecastAllowed" | "reason" | "reasonCodes">;
+interface Props { r: R & { s1: string; s3: string; skill: string; dec: string }; locale: Locale }
+const { r, locale } = Astro.props;
+const mk = msgKey[locale];
+const k = (key: string) => t(locale, key as MessageKey);
+const st = (s: StepState) => k(`wf.st.${s}`);
+---
+<details class="basis">
+  <summary>{k("wf.basis")}</summary>
+  <ol class="steps">
+    <li data-state="pass"><h4>{k("wf.s1")}</h4><b>{st("pass")}</b><div class="bd">{r.s1}</div></li>
+    <li data-state={r.data.state}><h4>{k("wf.s2")}</h4><b>{st(r.data.state)}</b><div class="bd">
+      {r.data.reasons.length === 0 ? k("wf.none") : (
+        <ul>{r.data.reasons.map((x) => <li><code>{x.code}</code> <i>{x.severity}</i></li>)}</ul>
+      )}
+    </div></li>
+    <li data-state={r.backtest.state}><h4>{k("wf.s3")}</h4><b>{st(r.backtest.state)}</b><div class="bd">
+      {r.backtest.state === "skip" ? k("wf.s3.skip") : (
+        <>
+          <p>{r.s3}</p>
+          <p>{r.skill || k("wf.s3.nomodel")}</p>
+          {r.backtest.reasons.length > 0 && <ul>{r.backtest.reasons.map((x) => <li><code>{x.code}</code> <i>{x.severity}</i> {x.message[mk]}</li>)}</ul>}
+        </>
+      )}
+    </div></li>
+    <li data-state={r.decision}><h4>{k("wf.s4")}</h4><b class="dec">{r.dec}</b><div class="bd">
+      <p class="pol"><code>forecast_allowed: {String(r.forecastAllowed)}</code> <code>reason: {r.reason}</code> <code>reason_codes: [{r.reasonCodes.join(", ")}]</code></p>
+    </div></li>
+  </ol>
+</details>

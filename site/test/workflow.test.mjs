@@ -25,12 +25,12 @@ function section(html) {
   return m[0];
 }
 function runs(sec) {
-  return [...sec.matchAll(/<article class="run[^"]*" data-series="([^"]+)" data-decision="([^"]+)" data-rec(?:="([^"]*)")?[^>]*>([\s\S]*?)<\/article>/g)].map((m) => {
-    const steps = [...m[4].matchAll(/<li data-state="([^"]+)"><h4>([^<]*)<\/h4><b[^>]*>([^<]*)<\/b><div class="bd">([\s\S]*?)<\/div><\/li>/g)]
+  return [...sec.matchAll(/<article class="run[^"]*" data-series="([^"]+)" data-decision="([^"]+)" data-rec(?:="([^"]*)")?([^>]*)>([\s\S]*?)<\/article>/g)].map((m) => {
+    const steps = [...m[5].matchAll(/<li data-state="([^"]+)"><h4>([^<]*)<\/h4><b[^>]*>([^<]*)<\/b><div class="bd">([\s\S]*?)<\/div><\/li>/g)]
       .map((s) => ({ state: s[1], title: s[2], chip: s[3], body: s[4] }));
-    const methods = [...m[4].matchAll(/<label class="mc ([^"]*)"[^>]*>\s*<input type="radio" name="wf-m-[^"]+" value="([^"]+)"([^>]*)>([\s\S]*?)<\/label>/g)]
+    const methods = [...m[5].matchAll(/<label class="mc ([^"]*)"[^>]*>\s*<input type="radio" name="wf-m-[^"]+" value="([^"]+)"([^>]*)>([\s\S]*?)<\/label>/g)]
       .map((x) => ({ state: x[1].split(" ")[0], id: x[2], checked: / checked\b/.test(x[3]), disabled: / disabled\b/.test(x[3]), aria: /aria-disabled="true"/.test(x[3]), why: (x[4].match(/<span class="mw">([^<]*)<\/span>/) || [])[1] || "" }));
-    return { id: m[1], decision: m[2], rec: m[3] ?? "", body: m[4], steps, methods };
+    return { id: m[1], decision: m[2], rec: m[3] ?? "", stop: / data-stop\b/.test(m[4]), body: m[5], steps, methods };
   });
 }
 const panel = (body, n) => [...body.matchAll(new RegExp(`<div class="pn p${n}[^"]*">([\\s\\S]*?)(?=<div class="pn |<div class="chartbox"|$)`, "g"))].map((m) => m[1]).join("");
@@ -54,7 +54,8 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
       assert.ok(r.body.includes(`<code>reason: ${s.policy.reason}</code>`));
       assert.ok(r.body.includes(`<code>reason_codes: [${s.gate.reason_codes.join(", ")}]</code>`));
       assert.deepEqual(m.gate.reason_codes, s.gate.reason_codes);
-      assert.ok(r.body.includes(`href="#s-${r.id}"`) && html.includes(`id="s-${r.id}"`), "anchor to the full card");
+      assert.ok(html.includes(`id="s-${r.id}"`));
+      if (!r.stop) assert.ok(r.body.includes(`href="#s-${r.id}"`), "anchor to the full card");
       assert.equal((r.body.match(/<svg class="chart/g) || []).length, 1, `${r.id}: one chart shared by steps ② and ④`);
       assert.match(r.body, new RegExp(`class="badge" data-gate="${r.decision}"`));
       if (s.policy.forecast_allowed) assert.match(r.body, /<path class="b80"/, `${r.id}: forecast band in the chart`);
@@ -72,13 +73,25 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
       const dataReasons = s.gate.reasons.filter((g) => !BACKTEST_CODES.has(g.code));
       for (const g of dataReasons) assert.ok(p2.includes(esc(g.message[mk])), `${r.id}: ${g.code} explained in plain words`);
       if (!dataReasons.length) assert.match(p2, /class="ok"/);
-      assert.match(p2, /data-to="3"/, "next goes to step ③");
+      if (r.stop) {
+        // no selectable method -> stopped here: red conclusion, basis, "pick another series"; no step ③/④ at all
+        assert.ok(!/data-to="3"/.test(p2) && /<button type="button" class="pri" data-to="1">/.test(p2), `${r.id}: only "pick another series"`);
+        assert.match(p2, /<div class="stop"><h5>[^<]+<\/h5><ul>(<li>[^<]+<\/li>)+<\/ul><\/div>/, `${r.id}: red conclusion with reasons`);
+        assert.match(p2, /<details class="basis">/, `${r.id}: basis under the conclusion`);
+        assert.equal(panel(r.body, 3) + panel(r.body, 4), "", `${r.id}: no step ③/④ markup`);
+      } else assert.match(p2, /data-to="3"/, "next goes to step ③");
     }
+    // stopped = no selectable method, derived from the data: exactly the refused series here
+    for (const r of found) assert.equal(r.stop, !json(`series/${r.id}.json`).policy.forecast_allowed, `${r.id}: stop <=> refused`);
+    const why = (id) => panel(found.find((r) => r.id === id).body, 2).match(/<div class="stop">([\s\S]*?)<\/div>/)[1];
+    assert.notEqual(why("eu_eea_flu_positivity"), why("malta_flu_detections"), "EU (thin backtest) and Malta (data blocked) give different reasons");
+    assert.ok(strip(why("malta_flu_detections")).includes("51"), "Malta reason quotes its 51 weeks");
+    assert.ok(!found.some((r) => !r.stop && /class="stop"/.test(r.body)), "no conclusion block on forecastable series");
   });
 
   test(`${locale}: ③ every repository method is listed; recommended / amber (demo) / red (unavailable) follow the data`, () => {
     const PROD = ["MSTL", "AutoTheta", "Naive", "SeasonalNaive"];
-    for (const r of found) {
+    for (const r of found.filter((r) => !r.stop)) {
       const s = json(`series/${r.id}.json`);
       const bt = s.backtest;
       const order = bt
@@ -90,7 +103,8 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
       assert.ok(ets.state === "na" && ets.disabled && ets.why, `${r.id}: seasonal ETS red with a reason`);
       assert.equal(s.series.season_length, 52, "the ETS reason is the weekly-52 limitation");
       for (const x of r.methods) assert.ok(x.why.length > 0, `${r.id}/${x.id}: every card has a reason`);
-      if (s.policy.forecast_allowed) {
+      assert.ok(s.policy.forecast_allowed);
+      {
         assert.equal(r.rec, bt.chosen_model);
         assert.equal(order[0], bt.chosen_model, "chosen = lowest MAE");
         assert.equal(s.forecast.model, bt.chosen_model);
@@ -99,18 +113,18 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
         for (const x of r.methods.filter((x) => PROD.includes(x.id) && x.id !== bt.chosen_model))
           assert.ok(x.state === "alt" && x.aria && !x.disabled && !x.checked, `${r.id}/${x.id}: amber, demo-locked`);
         assert.ok(r.methods.some((x) => x.state === "alt") && r.methods.some((x) => x.state === "na"), `${r.id}: has amber and red`);
-      } else {
-        assert.equal(r.rec, "");
-        assert.ok(r.methods.every((x) => x.state === "na" && x.disabled && !x.checked), `${r.id}: all red and disabled`);
-        assert.match(panel(r.body, 3), /class="mn" data-dec="refused"/);
       }
+      // red cards are collapsed in one <details>, count in the summary, amber/recommended stay open
+      const p3 = panel(r.body, 3);
+      const nax = p3.match(/<details class="nax">\s*<summary>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/);
+      assert.ok(nax, `${r.id}: unavailable methods collapsed`);
+      const na = r.methods.filter((x) => x.state === "na");
+      assert.ok(nax[1].includes(`<span data-n>${na.length}</span>`), `${r.id}: count in the summary`);
+      for (const x of na) assert.ok(nax[2].includes(`value="${x.id}"`), `${r.id}/${x.id}: inside the collapsed block`);
+      for (const x of r.methods.filter((x) => x.state !== "na")) assert.ok(!nax[2].includes(`value="${x.id}"`), `${r.id}/${x.id}: not collapsed`);
+      assert.ok(!/class="mn" data-dec="refused"/.test(p3));
     }
-    const eu = found.find((r) => r.id === "eu_eea_flu_positivity");
-    const mt = found.find((r) => r.id === "malta_flu_detections");
-    const euW = eu.methods.find((x) => x.id === "MSTL").why, mtW = mt.methods.find((x) => x.id === "MSTL").why;
-    assert.notEqual(euW, mtW, "EU (thin backtest) and Malta (data blocked) give different reasons");
-    assert.ok(mtW.includes("51"), "Malta reason quotes its 51 weeks");
-    assert.ok(mt.methods.find((x) => x.id === "SeasonalNaive").why.length > mtW.length, "Malta seasonal naive also lacks a full season");
+    assert.match(sec, /<details class="bx nax">\s*<summary>[^<]+<\/summary>\s*<div class="nag" data-wf-x>/, "benchmark-only methods: collapsed too");
     // benchmark-only methods: one card each, disabled, numbers recomputed here from the committed raw results
     const rows = JSON.parse(read(path.join(here, "..", "..", "benchmarks", "results", "forecast.json"))).rows.filter((r) => !r.masked && r.metrics);
     const prod = new Set([...PROD]);
@@ -139,8 +153,8 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     for (const r of found) {
       const s = json(`series/${r.id}.json`);
       const p4 = panel(r.body, 4);
-      if (s.forecast) assert.equal((p4.match(/<ul class="pts fcl">([\s\S]*?)<\/ul>/)[1].match(/<li>/g) || []).length, Math.min(2, s.forecast.points.length));
-      else for (const g of s.gate.reasons.filter((x) => x.severity === "block")) assert.ok(p4.includes(esc(g.message[mk])), `${r.id}: refusal reason ${g.code}`);
+      if (r.stop) assert.equal(p4, "", `${r.id}: no step ④`);
+      else assert.equal((p4.match(/<ul class="pts fcl">([\s\S]*?)<\/ul>/)[1].match(/<li>/g) || []).length, Math.min(2, s.forecast.points.length));
       assert.match(r.body, new RegExp(`<details class="basis">\\s*<summary>${EV_TITLE[locale]}</summary>`), `${r.id}: collapsed “${EV_TITLE[locale]}”`);
       assert.equal(r.steps.length, 4, `${r.id}: four steps`);
       const [load, checks, bt, dec] = r.steps;
