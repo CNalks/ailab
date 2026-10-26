@@ -29,15 +29,24 @@ National or supra-national aggregates only; no sub-national or community-level d
 2. **Data overview**: time span, frequency, length (≈ seasons), latest value, last-52-week range, missing weeks and longest gap,
    seasonality (`gate.metrics.seasonal_strength` against `thresholds.min_seasonal_strength`) and the history chart; then the
    data check-up findings in plain words (the data-stage `gate.reasons`).
-3. **Choose a method**: one card per model that went through the rolling-origin backtest (`backtest.models`: Naive, MSTL,
-   AutoTheta and the SeasonalNaive baseline), with the mean absolute error, a bar, and the error relative to the baseline.
-   The **recommended** card is `backtest.chosen_model`; `workflow.ts` fails the build unless it is the lowest-MAE candidate
-   and equals `forecast.model`. It is pre-selected with a one-line reason. Limited series state the limits; refused series
-   explain why nothing is recommended (thin backtest) or why there are no methods (data check blocked).
+3. **Choose a method**: every forecasting method the repository has, each with a state derived at build time from the
+   series JSON (`workflow.ts`):
+   * **recommended** (pre-selected): `backtest.chosen_model`; the build fails unless it is the lowest-MAE candidate and
+     equals `forecast.model`;
+   * **amber, not recommended** (allowed / limited series): the other production models (`src/ailab/forecast.py`
+     BASELINE + CANDIDATES: SeasonalNaive, Naive, MSTL, AutoTheta) with MAE, bar and the reason (error vs the
+     recommendation, did not beat the baseline, baseline for comparison). Clicking one shows a small toast
+     ("Demo mode: please choose the recommended method", `aria-live`) and keeps the recommendation;
+   * **red, unavailable** (disabled): seasonal ETS on every series ("statsforecast does not fit a seasonal ETS at weekly
+     period 52", forecast.py / METHODS.md, checked against `series.season_length`); all production models on refused
+     series, with the reason from the recorded gate metrics: EU/EEA `insufficient_backtest` (seasons covered vs
+     `backtest_seasons_block`), Malta `too_short` / `too_many_gaps` (+ "less than one season" for seasonal naive);
+   * once, for all series: the methods tried in `benchmarks/forecast_bench.py` but not adopted (SWA3, MSTL+AutoARIMA,
+     two ensembles; docs/BENCHMARK.md), marked "not a candidate in this demo".
+   The build fails if `backtest.models` differs from the production set.
 4. **Result**: the decision badge (allowed / limited / refused), the forecast band, the first and last forecast week with
    the 80% band, the outcome line, and the collapsed **Basis and limits** (the four recorded steps). The static site only
-   publishes the forecast of the recommended method: picking another method shows its backtest score and a note, with a
-   button to switch back. Showing every method's own forecast would need the export to write per-model `forecast` points
+   publishes the forecast of the recommended method (hence the demo-mode lock). Showing every method's own forecast would need the export to write per-model `forecast` points
    and interval widths (`interval_widths(bt, model)` per candidate).
 
 A stepper and Back buttons move between steps; choosing another series resets to step 1 and the recommended method.

@@ -38,7 +38,22 @@ export interface Run {
   /** recommended method = backtest.chosen_model (asserted to be the lowest-MAE candidate); null when nothing may be forecast */
   rec: string | null;
 }
-export interface Method { id: string; mae: number; rel: number; baseline: boolean; recommended: boolean; beatsBaseline: boolean }
+/** Step ③ card state: rec = recommended (selectable), alt = applicable but not recommended (amber reason, demo mode
+ *  keeps the recommendation), na = not applicable to this series (red reason, disabled). */
+export type MethodState = "rec" | "alt" | "na";
+/** One reason, rendered by the component as i18n key `wf.why.<k>` with params, or (k = "msg") the recorded gate message. */
+export interface Why { k: string; p?: Record<string, number>; code?: string }
+export interface Method {
+  id: string; mae: number | null; rel: number | null; baseline: boolean; recommended: boolean; beatsBaseline: boolean;
+  state: MethodState; why: Why[];
+}
+/** Production model set of src/ailab/forecast.py (BASELINE + CANDIDATES); the build fails if backtest.models differs. */
+export const PROD_MODELS = ["MSTL", "AutoTheta", "Naive", "SeasonalNaive"] as const;
+/** Imported in src/ailab/forecast.py but deliberately not a candidate: "statsforecast does not fit a seasonal ETS at weekly
+ *  period 52, so it collapses to Naive" (forecast.py docstring, docs/METHODS.md). */
+export const EXCLUDED_ETS = "AutoETS";
+/** Tried in benchmarks/forecast_bench.py, not adopted (docs/BENCHMARK.md §2): series-independent, listed once. */
+export const BENCH_ONLY = ["SWA3", "MSTL_ARIMA", "ENS_mstl_theta", "ENS_mstl_theta_swa"] as const;
 export interface Overview {
   from: string; to: string; n: number; seasons: number; missing: number; missingFrac: number; longestGap: number;
   last: { ds: string; y: number } | null; year: { min: number; max: number } | null;
@@ -95,29 +110,55 @@ export function assertRun(id: string, res: SeriesResult): Run {
     skill = { model: bt.chosen_model, rel: rel as number, maxRel: maxRel as number, cov80: res.forecast?.calibration?.["80"]?.empirical_loo ?? null };
   }
   if (g.decision !== "refused" && !skill) fail("forecast allowed without a chosen backtest model");
-  // 4. step ③: the recommendation is the recorded chosen model, and it must really be the lowest-MAE candidate
+  const q = res.quality;
+  // 4. step ③: every method the repository has, with a state and reasons derived from this series' JSON.
+  //    The recommendation is the recorded chosen model, and it must really be the lowest-MAE candidate.
   const btx = bt as (NonNullable<typeof bt> & { baseline?: string }) | null;
-  let methods: Method[] = [];
+  const sx = res.series as SeriesResult["series"] & { season_length?: number };
+  const L = sx.season_length ?? fail("series.season_length missing");
+  const kind = res.series.indicator_type;
+  const met = (r: GateReason, k: string) => (typeof r.metrics?.[k] === "number" ? r.metrics[k] : fail(`${r.code}.metrics.${k} missing`));
+  const thr = (r: GateReason & { thresholds?: Record<string, number> }, k: string) =>
+    typeof r.thresholds?.[k] === "number" ? r.thresholds[k] : fail(`${r.code}.thresholds.${k} missing`);
+  const dataWhy: Why[] = dataR.filter((r) => r.severity === "block").map((r): Why =>
+    r.code === "too_short" ? { k: "short", p: { n: met(r, "n_periods"), s: met(r, "seasons"), min: met(r, "min_seasons") } }
+    : r.code === "too_many_gaps" ? { k: "gaps", p: { p: met(r, "missing_pct"), g: met(r, "longest_gap"), max: met(r, "max_gap") } }
+    : { k: "msg", code: r.code });
+  const btWhy: Why[] = btR.filter((r) => r.severity === "block").map((r): Why => {
+    if (r.code !== "insufficient_backtest") return { k: "msg", code: r.code };
+    const s = met(r, "seasons_covered"), min = thr(r, "backtest_seasons_block");
+    return s < min ? { k: "btSeasons", p: { s, min } } : { k: "btWindows", p: { n: met(r, "n_windows"), min: met(r, "min_windows") } };
+  });
+  let order: string[] = [...PROD_MODELS];
+  const base = btx ? (btx.baseline ?? fail("backtest without baseline")) : "SeasonalNaive";
   if (btx) {
-    const base = btx.baseline ?? fail("backtest without baseline");
     const ms = Object.entries(btx.models);
-    if (!btx.models[base]) fail(`baseline ${base} missing from backtest.models`);
+    if (!same(ms.map(([m]) => m).sort(), [...PROD_MODELS].sort())) fail(`backtest.models ${ms.map(([m]) => m)} != ${PROD_MODELS} (update workflow.ts)`);
     for (const [m, v] of ms) if (typeof v.mae !== "number" || typeof v.rel_mae_vs_seasonal_naive !== "number") fail(`backtest.models.${m} lacks mae / rel_mae`);
     const cands = ms.filter(([m]) => m !== base).sort((a, b) => a[1].mae - b[1].mae);
-    if (!cands.length) fail("no candidate model in backtest.models");
     if (btx.chosen_model && btx.chosen_model !== cands[0][0]) fail(`chosen_model ${btx.chosen_model} is not the lowest-MAE candidate ${cands[0][0]}`);
     if (res.forecast && res.forecast.model !== btx.chosen_model) fail(`forecast.model ${res.forecast.model} != chosen_model`);
-    const maxRel = g.thresholds?.max_rel_mae ?? 1;
-    methods = [...cands, ms.find(([m]) => m === base)!].map(([m, v]) => ({
-      id: m, mae: v.mae, rel: v.rel_mae_vs_seasonal_naive as number, baseline: m === base,
-      recommended: g.decision !== "refused" && m === btx.chosen_model,
-      beatsBaseline: m !== base && (v.rel_mae_vs_seasonal_naive as number) < maxRel
-    }));
+    order = [...cands.map(([m]) => m), base];
   }
+  const maxRel = g.thresholds?.max_rel_mae ?? 1;
+  const recId = g.decision !== "refused" && btx ? btx.chosen_model : null;
+  const methods: Method[] = order.map((m) => {
+    const v = btx?.models[m];
+    const rel = v ? (v.rel_mae_vs_seasonal_naive as number) : null;
+    const st: MethodState = m === recId ? "rec" : g.decision === "refused" || kind === "event" ? "na" : "alt";
+    const why: Why[] = kind === "event" ? [{ k: "event" }]
+      : st !== "na" ? []
+      : dataState === "block" ? [...(m === "SeasonalNaive" && q.n_weeks < L ? [{ k: "season1", p: { L } }] : []), ...dataWhy]
+      : btWhy;
+    if (st === "na" && !why.length) fail(`${m}: not applicable without a recorded reason`);
+    return { id: m, mae: v?.mae ?? null, rel, baseline: m === base, recommended: st === "rec", beatsBaseline: m !== base && rel !== null && rel < maxRel, state: st, why };
+  });
+  // seasonal ETS: excluded by the code for weekly season 52; for any other season length we have no documented reason
+  methods.push({ id: EXCLUDED_ETS, mae: null, rel: null, baseline: false, recommended: false, beatsBaseline: false, state: "na",
+    why: [L === 52 ? { k: "ets", p: { L } } : { k: "notin" }] });
   const rec = methods.find((m) => m.recommended)?.id ?? null;
   if ((rec !== null) !== p.forecast_allowed) fail("a recommendation exists iff the forecast is allowed");
   // 5. step ②: overview numbers
-  const q = res.quality;
   const gm = (res.gate as { metrics?: Record<string, unknown> }).metrics ?? {};
   const obs = res.observations;
   const lastI = obs.map((o) => o.y).findLastIndex((y) => y != null);

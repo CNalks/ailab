@@ -28,8 +28,8 @@ function runs(sec) {
   return [...sec.matchAll(/<article class="run[^"]*" data-series="([^"]+)" data-decision="([^"]+)" data-rec(?:="([^"]*)")?[^>]*>([\s\S]*?)<\/article>/g)].map((m) => {
     const steps = [...m[4].matchAll(/<li data-state="([^"]+)"><h4>([^<]*)<\/h4><b[^>]*>([^<]*)<\/b><div class="bd">([\s\S]*?)<\/div><\/li>/g)]
       .map((s) => ({ state: s[1], title: s[2], chip: s[3], body: s[4] }));
-    const methods = [...m[4].matchAll(/<label class="mc([^"]*)"[^>]*>\s*<input type="radio" name="wf-m-[^"]+" value="([^"]+)"([^>]*)>/g)]
-      .map((x) => ({ cls: x[1], id: x[2], checked: / checked\b/.test(x[3]) }));
+    const methods = [...m[4].matchAll(/<label class="mc ([^"]*)"[^>]*>\s*<input type="radio" name="wf-m-[^"]+" value="([^"]+)"([^>]*)>([\s\S]*?)<\/label>/g)]
+      .map((x) => ({ state: x[1].split(" ")[0], id: x[2], checked: / checked\b/.test(x[3]), disabled: / disabled\b/.test(x[3]), aria: /aria-disabled="true"/.test(x[3]), why: (x[4].match(/<span class="mw">([^<]*)<\/span>/) || [])[1] || "" }));
     return { id: m[1], decision: m[2], rec: m[3] ?? "", body: m[4], steps, methods };
   });
 }
@@ -76,33 +76,46 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     }
   });
 
-  test(`${locale}: ③ methods are the backtested models; the recommendation is the lowest-MAE chosen model`, () => {
+  test(`${locale}: ③ every repository method is listed; recommended / amber (demo) / red (unavailable) follow the data`, () => {
+    const PROD = ["MSTL", "AutoTheta", "Naive", "SeasonalNaive"];
     for (const r of found) {
       const s = json(`series/${r.id}.json`);
       const bt = s.backtest;
-      if (!bt) {
-        assert.equal(r.methods.length, 0, `${r.id}: no backtest -> no methods`);
-        assert.equal(r.rec, "");
-        continue;
-      }
-      const base = bt.baseline;
-      const order = Object.entries(bt.models).filter(([k]) => k !== base).sort((a, b) => a[1].mae - b[1].mae).map(([k]) => k);
-      assert.deepEqual(r.methods.map((x) => x.id), [...order, base], `${r.id}: every backtested model, baseline last`);
+      const order = bt
+        ? [...Object.entries(bt.models).filter(([k]) => k !== bt.baseline).sort((a, b) => a[1].mae - b[1].mae).map(([k]) => k), bt.baseline]
+        : PROD;
+      if (bt) assert.deepEqual(Object.keys(bt.models).sort(), [...PROD].sort(), "backtest models = production set");
+      assert.deepEqual(r.methods.map((x) => x.id), [...order, "AutoETS"], `${r.id}: production models (by MAE, baseline last) + excluded seasonal ETS`);
+      const ets = r.methods.find((x) => x.id === "AutoETS");
+      assert.ok(ets.state === "na" && ets.disabled && ets.why, `${r.id}: seasonal ETS red with a reason`);
+      assert.equal(s.series.season_length, 52, "the ETS reason is the weekly-52 limitation");
+      for (const x of r.methods) assert.ok(x.why.length > 0, `${r.id}/${x.id}: every card has a reason`);
       if (s.policy.forecast_allowed) {
         assert.equal(r.rec, bt.chosen_model);
         assert.equal(order[0], bt.chosen_model, "chosen = lowest MAE");
         assert.equal(s.forecast.model, bt.chosen_model);
-        const rec = r.methods.filter((x) => x.checked);
-        assert.deepEqual(rec.map((x) => x.id), [bt.chosen_model], "recommended method selected by default");
-        assert.match(r.methods.find((x) => x.id === bt.chosen_model).cls, /\brec\b/);
-        assert.ok(!/<fieldset class="ms" disabled/.test(r.body));
+        const rec = r.methods.find((x) => x.id === bt.chosen_model);
+        assert.ok(rec.state === "rec" && rec.checked && !rec.disabled && !rec.aria, "recommended: selected, selectable");
+        for (const x of r.methods.filter((x) => PROD.includes(x.id) && x.id !== bt.chosen_model))
+          assert.ok(x.state === "alt" && x.aria && !x.disabled && !x.checked, `${r.id}/${x.id}: amber, demo-locked`);
+        assert.ok(r.methods.some((x) => x.state === "alt") && r.methods.some((x) => x.state === "na"), `${r.id}: has amber and red`);
       } else {
         assert.equal(r.rec, "");
-        assert.ok(r.methods.every((x) => !x.checked && !/\brec\b/.test(x.cls)), `${r.id}: nothing recommended`);
-        assert.match(r.body, /<fieldset class="ms" disabled/);
+        assert.ok(r.methods.every((x) => x.state === "na" && x.disabled && !x.checked), `${r.id}: all red and disabled`);
+        assert.match(panel(r.body, 3), /class="mn" data-dec="refused"/);
       }
-      if (s.gate.decision !== "allowed") assert.match(panel(r.body, 3), new RegExp(`class="mn" data-dec="${s.gate.decision}"`), `${r.id}: reason shown`);
     }
+    const eu = found.find((r) => r.id === "eu_eea_flu_positivity");
+    const mt = found.find((r) => r.id === "malta_flu_detections");
+    const euW = eu.methods.find((x) => x.id === "MSTL").why, mtW = mt.methods.find((x) => x.id === "MSTL").why;
+    assert.notEqual(euW, mtW, "EU (thin backtest) and Malta (data blocked) give different reasons");
+    assert.ok(mtW.includes("51"), "Malta reason quotes its 51 weeks");
+    assert.ok(mt.methods.find((x) => x.id === "SeasonalNaive").why.length > mtW.length, "Malta seasonal naive also lacks a full season");
+    const mx = sec.match(/<div class="mx" data-wf-x>([\s\S]*?)<\/div>/);
+    assert.ok(mx, "benchmark-only methods listed once");
+    assert.equal((mx[1].match(/<li>/g) || []).length, 4);
+    assert.match(sec, /<div class="wf-toast js" role="status" aria-live="assertive" data-wf-toast hidden><\/div>/);
+    assert.match(sec, /data-demo="[^"]+"/);
   });
 
   test(`${locale}: ④ result — decision, forecast points, basis and limits with the four recorded steps`, () => {
@@ -137,7 +150,6 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
 
   test(`${locale}: step navigation, accessible no-JS fallback, CLI secondary`, () => {
     assert.match(sec, /data-step="1"/);
-    assert.match(sec, /data-use-rec/);
     assert.match(sec, /role="status" aria-live="polite"/);
     assert.match(sec, /data-done="/);
     assert.match(sec, /<noscript><p class="wf-note">[^<]+<\/p><\/noscript>/);

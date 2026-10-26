@@ -4,7 +4,7 @@
 // site/public/data; workflow.ts fails the build on inconsistent artefacts or a recommendation that is not the
 // lowest-error candidate. Only the recommended method has a published forecast; other methods show backtest scores.
 import SeriesChart from "./SeriesChart.astro";
-import { runs, type StepState } from "../lib/workflow";
+import { runs, BENCH_ONLY, type StepState, type Why } from "../lib/workflow";
 import { sources } from "../lib/data";
 import { asset, msgKey, type Locale } from "../i18n/config";
 import { t, type MessageKey } from "../i18n";
@@ -34,16 +34,22 @@ const items = runs().map((r) => {
     : k(`gate.${r.decision}.s`);
   const mname = (id: string) => k(`wf.m.${id}.n`);
   const recM = r.methods.find((m) => m.recommended);
-  const maxMae = Math.max(...r.methods.map((m) => m.mae), 0);
+  const maxMae = Math.max(...r.methods.map((m) => m.mae ?? 0), 0);
+  const whyText = (w: Why) => w.k === "msg"
+    ? (g.reasons.find((x) => x.code === w.code)?.message[mk] ?? w.code!)
+    : k(`wf.why.${w.k}`, Object.fromEntries(Object.entries(w.p ?? {}).map(([n, v]) =>
+        [n, n === "p" ? formatPercent(locale, v / 100) : formatNumber(locale, v, n === "s" ? 1 : 2)])));
   const methods = r.methods.map((m) => ({
-    ...m, name: mname(m.id), desc: k(`wf.m.${m.id}.d`), w: Math.max(2, Math.round((m.mae / maxMae) * 100)),
-    mae: k("wf.m.mae", { v: err(m.mae) }),
-    vs: m.baseline ? "" : k(m.rel < 1 ? "wf.m.lo" : "wf.m.hi", { p: formatPercent(locale, Math.abs(1 - m.rel)) }),
-    why: m.recommended ? k("wf.m.rec.why", { p: formatPercent(locale, 1 - m.rel) })
+    ...m, name: mname(m.id), desc: m.state === "na" ? "" : k(`wf.m.${m.id}.d`),
+    w: m.mae == null ? 0 : Math.max(2, Math.round((m.mae / maxMae) * 100)),
+    mae: m.mae == null ? "" : k("wf.m.mae", { v: err(m.mae) }),
+    vs: m.baseline || m.rel == null ? "" : k(m.rel < 1 ? "wf.m.lo" : "wf.m.hi", { p: formatPercent(locale, Math.abs(1 - m.rel)) }),
+    why: m.state === "na" ? m.why.map(whyText).join(" ")
+      : m.recommended ? k("wf.m.rec.why", { p: formatPercent(locale, 1 - (m.rel as number)) })
       : m.baseline ? k("wf.m.base.why")
       : !recM ? ""
       : !m.beatsBaseline ? k("wf.m.nowin", { r: formatNumber(locale, m.rel, 2) })
-      : k("wf.m.worse", { p: formatPercent(locale, m.mae / recM.mae - 1) })
+      : k("wf.m.worse", { p: formatPercent(locale, (m.mae as number) / (recM.mae as number) - 1) })
   }));
   const pts = r.res.forecast?.points ?? [];
   const pt = (p: (typeof pts)[number]) => k("wf.r.pt", { h: p.h, d: formatDate(locale, p.ds), v: val(p.point), lo: val(p.lo80 ?? p.point), hi: val(p.hi80 ?? p.point) });
@@ -66,7 +72,7 @@ const items = runs().map((r) => {
     cap: k(r.forecastAllowed ? "wf.o.chart.f" : "wf.o.chart", { n: Math.min(WEEKS, q.n_weeks) }),
     mlead: bt ? k("wf.m.lead", { n: bt.n_windows, h: bt.horizon }) : "",
     mnote: r.decision === "limited" ? k("wf.m.limit", { h: lim ?? "–", infl: formatNumber(locale, g.limits.interval_inflation, 2) })
-      : r.decision === "refused" ? (bt ? k("wf.m.none.bt", { msg: r.backtest.reasons.filter((x) => x.severity === "block").map((x) => x.message[mk]).join(" ") }) : k("wf.m.none.data"))
+      : r.decision === "refused" ? k("wf.m.none")
       : "",
     go4: r.forecastAllowed ? k("wf.run.h", { h: horizon }) : k("wf.see"),
     pts: pts.length ? [pt(pts[0]), ...(pts.length > 1 ? [pt(pts[pts.length - 1])] : [])] : [],
@@ -84,7 +90,7 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
 ---
 
 <script is:inline>document.documentElement.classList.add("wf-js")</script>
-<section class="wf" id="workflow" aria-labelledby="wf-t" data-wf data-step="1" data-done={k("wf.done")} data-stp={k("wf.stp")} data-p={P.join("|")}>
+<section class="wf" id="workflow" aria-labelledby="wf-t" data-wf data-step="1" data-done={k("wf.done")} data-stp={k("wf.stp")} data-p={P.join("|")} data-demo={k("wf.m.demo")}>
   <div class="container">
     <h2 id="wf-t">{k("wf.title")}</h2>
     <p class="wf-lead">{k("wf.lead")}</p>
@@ -107,7 +113,7 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
     </div>
 
     {items.map((r, i) => (
-      <article class:list={["run", i === 0 && "on"]} data-series={r.id} data-decision={r.decision} data-rec={r.rec ?? ""} data-name={r.name} data-dec={r.dec} data-alt="0">
+      <article class:list={["run", i === 0 && "on"]} data-series={r.id} data-decision={r.decision} data-rec={r.rec ?? ""} data-name={r.name} data-dec={r.dec}>
         <header class="head">
           <h3>{r.name}</h3>
           <span class="badge" data-gate={r.decision}>
@@ -147,28 +153,25 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
           <h4 class="ph" tabindex="-1">③ {k("wf.p3.t")}</h4>
           {r.mlead && <p class="ml">{r.mlead}</p>}
           {r.mnote && <p class="mn" data-dec={r.decision}>{r.mnote}</p>}
-          {r.methods.length > 0 && (
-            <fieldset class="ms" disabled={!r.rec}>
-              <legend class="vh">{k("wf.p3.t")}</legend>
-              {r.methods.map((m) => (
-                <label class:list={["mc", m.recommended && "rec", m.baseline && "base"]}>
-                  <input type="radio" name={`wf-m-${r.id}`} value={m.id} data-mn={m.name} checked={m.recommended} />
-                  <span class="mt"><b>{m.name}</b>{m.recommended && <em>{k("wf.m.rec")}</em>}<code>{m.id}</code></span>
-                  <span class="md">{m.desc}</span>
-                  <span class="bar"><i style={`width:${m.w}%`}></i></span>
-                  <span class="mv">{m.mae}{m.vs && ` · ${m.vs}`}</span>
-                  {m.why && <span class="mw">{m.why}</span>}
-                </label>
-              ))}
-            </fieldset>
-          )}
+          <fieldset class="ms">
+            <legend class="vh">{k("wf.p3.t")}</legend>
+            {r.methods.map((m) => (
+              <label class:list={["mc", m.state, m.baseline && "base"]}>
+                <input type="radio" name={`wf-m-${r.id}`} value={m.id} checked={m.recommended} disabled={m.state === "na"} aria-disabled={m.state === "alt" ? "true" : undefined} />
+                <span class="mt"><b>{m.name}</b><em>{k(`wf.m.${m.state}`)}</em></span>
+                {m.desc && <span class="md">{m.desc}</span>}
+                {m.mae && <span class="bar"><i style={`width:${m.w}%`}></i></span>}
+                {m.mae && <span class="mv">{m.mae}{m.vs && ` · ${m.vs}`}</span>}
+                {m.why && <span class="mw">{m.why}</span>}
+              </label>
+            ))}
+          </fieldset>
           <div class="nav js"><button type="button" data-to="2">{k("wf.prev")}</button><button type="button" class="pri" data-to="4">{r.go4}</button></div>
         </div>
 
         <div class="pn p4 p4a">
           <h4 class="ph" tabindex="-1">④ {k("wf.p4.t")}</h4>
           {r.rec && <p class="rm">{k("wf.r.method", { m: r.recName })} <em>{k("wf.m.rec")}</em></p>}
-          {r.rec && <p class="alt js">{k("wf.r.alt", { m: "{m}", rec: r.recName }).split("{m}").map((s, j) => <>{j > 0 && <b data-m />}{s}</>)} <button type="button" data-use-rec>{k("wf.r.use")}</button></p>}
         </div>
 
         <div class="pn p4">
@@ -206,6 +209,13 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
       </article>
     ))}
 
+    <div class="mx" data-wf-x>
+      <h5>{k("wf.m.x.t")}</h5>
+      <p class="mw">{k("wf.m.x.why")} <a href="https://github.com/CNalks/ailab/blob/main/docs/BENCHMARK.md">BENCHMARK.md</a></p>
+      <ul>{BENCH_ONLY.map((id) => <li><b>{k(`wf.m.x.${id}`)}</b> <em>{k("wf.m.na")}</em></li>)}</ul>
+    </div>
+    <div class="wf-toast js" role="status" aria-live="assertive" data-wf-toast hidden></div>
+
     <details class="repro">
       <summary>{k("wf.repro")}</summary>
       <pre tabindex="0"><code>{`uv run python scripts/build_showcase_data.py\njq '.backtest.models | map_values(.mae)' \\\n  site/public/data/series/<series_id>.json\njq '.gate | {decision, reason_codes}' \\\n  site/public/data/series/<series_id>.json`}</code></pre>
@@ -219,6 +229,8 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   const root = document.querySelector<HTMLElement>("[data-wf]");
   if (root) {
     const status = root.querySelector<HTMLElement>("[data-wf-status]")!;
+    const toast = root.querySelector<HTMLElement>("[data-wf-toast]")!;
+    const shared = root.querySelector<HTMLElement>("[data-wf-x]")!;
     const runs = [...root.querySelectorAll<HTMLElement>(".run")];
     const nav = [...root.querySelectorAll<HTMLButtonElement>("[data-go]")];
     const labels = root.dataset.p!.split("|");
@@ -226,16 +238,20 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
     let sid = root.querySelector<HTMLInputElement>('input[name="wf-s"]:checked')?.value ?? runs[0].dataset.series!;
     let step = 1;
     let reached = 1;
+    let timer = 0;
     const run = () => runs.find((r) => r.dataset.series === sid)!;
-    const method = (r: HTMLElement) => r.querySelector<HTMLInputElement>('.ms input:checked');
+    const hideToast = () => { toast.hidden = true; toast.textContent = ""; };
+    const demo = () => {
+      toast.textContent = root.dataset.demo!;
+      toast.hidden = false;
+      clearTimeout(timer);
+      timer = window.setTimeout(hideToast, 2800);
+    };
     const render = (focus: boolean) => {
       const r = run();
       runs.forEach((x) => x.classList.toggle("on", x === r));
       root.dataset.step = String(step);
-      const m = method(r);
-      const alt = !!r.dataset.rec && !!m && m.value !== r.dataset.rec;
-      r.dataset.alt = alt ? "1" : "0";
-      if (alt) r.querySelectorAll<HTMLElement>("[data-m]").forEach((b) => (b.textContent = m!.dataset.mn!));
+      r.querySelector(".p3 .nav")!.before(shared);
       nav.forEach((b) => {
         const n = Number(b.dataset.go);
         b.disabled = n > reached;
@@ -244,11 +260,12 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
       status.textContent = step === 4
         ? fill(root.dataset.done!, { name: r.dataset.name!, decision: r.dataset.dec! })
         : fill(root.dataset.stp!, { n: step, label: labels[step - 1] });
+      if (step !== 3) hideToast();
       if (focus) {
         const h = (step === 1 ? root : r).querySelector<HTMLElement>(`.p${step} .ph`);
         h?.focus({ preventScroll: true });
-        const top = root.querySelector<HTMLElement>(".wf-steps")!.getBoundingClientRect().top;
-        if (top < 0) root.querySelector<HTMLElement>(".wf-steps")!.scrollIntoView({ block: "start" });
+        const top = root.querySelector<HTMLElement>(".wf-steps")!;
+        if (top.getBoundingClientRect().top < 0) top.scrollIntoView({ block: "start" });
       }
     };
     const go = (n: number) => {
@@ -258,24 +275,23 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
     };
     root.addEventListener("change", (e) => {
       const el = e.target as HTMLInputElement;
-      if (el.name === "wf-s") {
-        sid = el.value;
-        reached = 1;
-        const r = run();
-        const rec = r.querySelector<HTMLInputElement>(`.ms input[value="${r.dataset.rec}"]`);
-        if (rec) rec.checked = true;
-        render(false);
-      } else if (el.name.startsWith("wf-m-")) render(false);
+      if (el.name !== "wf-s") return;
+      sid = el.value;
+      reached = 1;
+      render(false);
     });
     root.addEventListener("click", (e) => {
-      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-to],[data-go],[data-use-rec]");
-      if (!b) return;
-      if (b.dataset.useRec !== undefined) {
-        const r = run();
-        r.querySelector<HTMLInputElement>(`.ms input[value="${r.dataset.rec}"]`)!.checked = true;
-        render(false);
-      } else go(Number(b.dataset.to ?? b.dataset.go));
+      const t = e.target as HTMLElement;
+      // amber (applicable, not recommended) methods: demo mode keeps the recommendation and says so
+      if (t.closest(".mc.alt")) {
+        e.preventDefault();
+        demo();
+        return;
+      }
+      const b = t.closest<HTMLElement>("[data-to],[data-go]");
+      if (b) go(Number(b.dataset.to ?? b.dataset.go));
     });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !toast.hidden) hideToast(); });
     render(false);
   }
 </script>
@@ -305,7 +321,7 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   .wf .opt span { display: grid; gap: 2px; }
   .wf .opt small { color: var(--muted); font-size: var(--text-xs); }
   .wf .nav { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-4); }
-  .wf .nav button, .wf .alt button { min-height: 40px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--bg-elev); color: var(--ink); }
+  .wf .nav button { min-height: 40px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--bg-elev); color: var(--ink); }
   .wf .nav .pri { min-height: 44px; padding: 0 22px; border: 0; color: var(--on-accent); background: var(--accent); font-size: 15px; }
   .wf .nav .pri:hover { background: var(--accent-hover); }
   .wf .head { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); justify-content: space-between; align-items: center; }
@@ -335,7 +351,6 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   .wf .mn { margin-top: var(--s-3); padding: 10px 12px; border-radius: var(--radius); background: var(--panel); font-size: var(--text-sm); color: var(--ink-2); }
   .wf .ms { border: 0; margin: var(--s-3) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--s-3); }
   .wf .mc { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; font-size: var(--text-sm); }
-  .wf .ms:disabled .mc { cursor: default; opacity: 0.75; }
   .wf .mc > span { grid-column: 2; }
   .wf .mc input { grid-row: 1; }
   .wf .mt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -343,17 +358,29 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   .wf .mt code { margin-left: auto; }
   .wf .md, .wf .mw { color: var(--ink-2); }
   .wf .mw { font-size: var(--text-xs); }
+  .wf { --wf-y: #8a5300; --wf-r: #b42318; }
+  :root[data-theme="dark"] .wf { --wf-y: #f0b952; --wf-r: #ff8f85; }
   .wf .rec .mw { color: var(--accent-ink); font-weight: 600; }
+  .wf .alt .mw, .wf .alt em { color: var(--wf-y); }
+  .wf .na .mw, .wf .na em, .wf .mx .mw, .wf .mx em { color: var(--wf-r); }
+  .wf .mc.alt em, .wf .mc.na em, .wf .mx em { background: none; border: 1px solid currentColor; }
+  .wf .mc.na { cursor: not-allowed; background: var(--panel); }
+  .wf .mc.na b { color: var(--ink-2); }
+  .wf .mc.na .bar i { opacity: 0.35; }
+  .wf .mx { margin-top: var(--s-3); padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+  .wf .mx ul { margin: var(--s-2) 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .wf .mx b { font-weight: 600; color: var(--ink-2); }
+  .wf .mx h5, .wf .mx p { margin: 0; }
+  .wf .mx p { margin-top: 4px; }
+  .wf .mx a { color: var(--accent-ink); }
+  .wf-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(92vw, 420px); padding: 10px 16px; border-radius: var(--radius); background: var(--ink); color: var(--bg); font-size: var(--text-sm); font-weight: 600; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
+  .wf-toast[hidden] { display: none; }
   .wf .bar { display: block; height: 8px; margin-top: 4px; border-radius: 4px; background: var(--panel); }
   .wf .bar i { display: block; height: 100%; border-radius: 4px; background: var(--data); opacity: 0.55; }
   .wf .rec .bar i { opacity: 1; }
   .wf .base .bar i { background: var(--muted); }
   .wf .mv { font-variant-numeric: tabular-nums; color: var(--ink); }
   .wf .rm { margin-top: var(--s-2); font-size: var(--text-sm); color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
-  .wf .alt { display: none; margin-top: var(--s-2); padding: 10px 12px; border-radius: var(--radius); background: var(--panel); font-size: var(--text-sm); color: var(--ink-2); }
-  .wf .alt button { margin-left: 6px; min-height: 32px; }
-  .wf .run[data-alt="1"] .alt { display: block; }
-  .wf .run[data-alt="1"] :is(.rm, .out) { display: none; }
   .wf .nofc { margin-top: var(--s-3); }
   .wf i { color: var(--muted); font-size: var(--text-xs); font-style: normal; font-weight: 400; }
   .wf .basis, .wf .repro { margin-top: var(--s-4); }
@@ -388,5 +415,7 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   .wf-js .wf .pn { display: none; }
   .wf-js .wf[data-step="1"] .p1, .wf-js .wf[data-step="2"] .p2, .wf-js .wf[data-step="3"] .p3, .wf-js .wf[data-step="4"] .p4 { display: block; }
   .wf-js .wf:not([data-step="4"]) .badge, .wf-js .wf:not([data-step="2"]) .cap, .wf-js .wf[data-step="3"] .chartbox { display: none; }
-  .wf-js .wf:not([data-step="4"]) :is(.fc, .b80, .b95, .fcl), .wf .run[data-alt="1"] :is(.fc, .b80, .b95, .fcl) { display: none; }
+  .wf-js .wf:not([data-step="4"]) :is(.fc, .b80, .b95, .fcl) { display: none; }
+  .wf-js .wf .mx { display: none; }
+  .wf-js .wf[data-step="3"] .run.on .mx { display: block; }
 </style>
