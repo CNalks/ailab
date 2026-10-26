@@ -111,9 +111,25 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     assert.notEqual(euW, mtW, "EU (thin backtest) and Malta (data blocked) give different reasons");
     assert.ok(mtW.includes("51"), "Malta reason quotes its 51 weeks");
     assert.ok(mt.methods.find((x) => x.id === "SeasonalNaive").why.length > mtW.length, "Malta seasonal naive also lacks a full season");
-    const mx = sec.match(/<div class="mx" data-wf-x>([\s\S]*?)<\/div>/);
-    assert.ok(mx, "benchmark-only methods listed once");
-    assert.equal((mx[1].match(/<li>/g) || []).length, 4);
+    // benchmark-only methods: one card each, disabled, numbers recomputed here from the committed raw results
+    const rows = JSON.parse(read(path.join(here, "..", "..", "benchmarks", "results", "forecast.json"))).rows.filter((r) => !r.masked && r.metrics);
+    const prod = new Set([...PROD]);
+    const benchIds = Object.keys(rows[0].metrics).filter((m) => !prod.has(m));
+    const cards = [...sec.matchAll(/<label class="mc na bench">\s*<input type="radio" name="wf-m-x" value="([^"]+)" disabled>([\s\S]*?)<\/label>/g)];
+    assert.deepEqual(cards.map((c) => c[1]), benchIds, "one card per benchmark-only method");
+    const gm = (x) => Math.exp(x.reduce((a, b) => a + Math.log(b), 0) / x.length);
+    const fmt = (v) => new Intl.NumberFormat(mk === "zh" ? "zh-CN" : mk, { maximumFractionDigits: 2 }).format(v);
+    for (const [, id, body] of cards) {
+      assert.match(body, /<em>[^<]+<\/em>/, `${id}: unavailable tag`);
+      const all = gm(rows.map((r) => r.metrics[id].mae / r.metrics.SeasonalNaive.mae));
+      assert.ok(strip(body).includes(fmt(all)), `${id}: pooled relative MAE ${fmt(all)} shown`);
+      for (const [sid, sc] of [["us_ilinet_wili", "real_wili"], ["us_ilinet_ili_visits", "real_num_ili"]]) {
+        const r = rows.find((x) => x.scenario === sc);
+        const line = body.match(new RegExp(`data-for="${sid}">([^<]*)<`));
+        assert.ok(line && line[1].includes(fmt(r.metrics[id].mae / r.metrics.SeasonalNaive.mae)), `${id}: ${sid} figure`);
+      }
+    }
+    for (const r of found) assert.ok(!/<label class="mc alt[^"]*">[\s\S]*?<em>[\s\S]*?<\/label>/.test(r.body.replace(/<label class="mc (rec|na)[\s\S]*?<\/label>/g, "")), `${r.id}: no tag on amber cards`);
     assert.match(sec, /<div class="wf-toast js" role="status" aria-live="assertive" data-wf-toast hidden><\/div>/);
     assert.match(sec, /data-demo="[^"]+"/);
   });

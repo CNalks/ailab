@@ -41,8 +41,14 @@ National or supra-national aggregates only; no sub-national or community-level d
      period 52", forecast.py / METHODS.md, checked against `series.season_length`); all production models on refused
      series, with the reason from the recorded gate metrics: EU/EEA `insufficient_backtest` (seasons covered vs
      `backtest_seasons_block`), Malta `too_short` / `too_many_gaps` (+ "less than one season" for seasonal naive);
-   * once, for all series: the methods tried in `benchmarks/forecast_bench.py` but not adopted (SWA3, MSTL+AutoARIMA,
-     two ensembles; docs/BENCHMARK.md), marked "not a candidate in this demo".
+   * red, one card each, in every series' list: the methods tried in `benchmarks/forecast_bench.py` but not production
+     candidates (SWA3, MSTL+AutoARIMA, ensembles MSTL+Theta, MSTL+Theta+SWA3, MSTL+Theta+Naive). `src/lib/bench.ts`
+     recomputes, at build time from the committed `benchmarks/results/forecast.json`, each method's MAE relative to
+     seasonal naive (geometric mean over seeds) pooled over all unmasked scenarios and on the COVID-like scenario, next to
+     the current selection rule; for the two US ILINet series (same bundled FluView fixture as `real_wili` /
+     `real_num_ili`) the per-series figure is shown too. The cards are rendered once and moved into the active list by
+     JS; without JS they are listed after the series.
+   Amber cards carry no tag; "recommended" and "unavailable" do.
    The build fails if `backtest.models` differs from the production set.
 4. **Result**: the decision badge (allowed / limited / refused), the forecast band, the first and last forecast week with
    the 80% band, the outcome line, and the collapsed **Basis and limits** (the four recorded steps). The static site only
@@ -52,7 +58,8 @@ National or supra-national aggregates only; no sub-national or community-level d
 A stepper and Back buttons move between steps; choosing another series resets to step 1 and the recommended method.
 Without JavaScript every series is listed with its overview, methods and result (step 1 and the buttons are hidden).
 Reproduce (CLI / `jq`) is secondary. `npm test` checks fidelity to the JSON, i18n, and the ≤ +15 KB HTML budget vs main.
-`SeriesChart` styles are global (prefixed `.chart`) so SVG nodes carry no `data-astro-cid` attribute.
+`SeriesChart` styles are global (prefixed `.chart`) so SVG nodes carry no `data-astro-cid` attribute, and history paths use
+relative `l` steps between the same 0.1-rounded points (identical geometry, fewer bytes).
 
 
 ## Refresh data

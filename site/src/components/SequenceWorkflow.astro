@@ -4,7 +4,8 @@
 // site/public/data; workflow.ts fails the build on inconsistent artefacts or a recommendation that is not the
 // lowest-error candidate. Only the recommended method has a published forecast; other methods show backtest scores.
 import SeriesChart from "./SeriesChart.astro";
-import { runs, BENCH_ONLY, type StepState, type Why } from "../lib/workflow";
+import { runs, type StepState, type Why } from "../lib/workflow";
+import { bench, BENCH_SCENARIO } from "../lib/bench";
 import { sources } from "../lib/data";
 import { asset, msgKey, type Locale } from "../i18n/config";
 import { t, type MessageKey } from "../i18n";
@@ -87,6 +88,13 @@ const items = runs().map((r) => {
   };
 });
 const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
+const B = bench();
+const x2 = (v: number) => formatNumber(locale, v, 2);
+const benchCards = B.methods.map((m) => ({
+  id: m.id, name: k(`wf.m.x.${m.id}`),
+  why: k("wf.bx.why", { n: B.scenarios, all: x2(m.all), sel: x2(B.sel.all), cv: x2(m.covid), cvs: x2(B.sel.covid) }),
+  lines: Object.keys(BENCH_SCENARIO).map((id) => ({ id, t: k("wf.bx.s", { name: k(`s.${id}.n`), v: x2(m.series[id]), sel: x2(B.sel.series[id]) }) }))
+}));
 ---
 
 <script is:inline>document.documentElement.classList.add("wf-js")</script>
@@ -158,7 +166,7 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
             {r.methods.map((m) => (
               <label class:list={["mc", m.state, m.baseline && "base"]}>
                 <input type="radio" name={`wf-m-${r.id}`} value={m.id} checked={m.recommended} disabled={m.state === "na"} aria-disabled={m.state === "alt" ? "true" : undefined} />
-                <span class="mt"><b>{m.name}</b><em>{k(`wf.m.${m.state}`)}</em></span>
+                <span class="mt"><b>{m.name}</b>{m.state !== "alt" && <em>{k(`wf.m.${m.state}`)}</em>}</span>
                 {m.desc && <span class="md">{m.desc}</span>}
                 {m.mae && <span class="bar"><i style={`width:${m.w}%`}></i></span>}
                 {m.mae && <span class="mv">{m.mae}{m.vs && ` · ${m.vs}`}</span>}
@@ -209,10 +217,17 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
       </article>
     ))}
 
-    <div class="mx" data-wf-x>
-      <h5>{k("wf.m.x.t")}</h5>
-      <p class="mw">{k("wf.m.x.why")} <a href="https://github.com/CNalks/ailab/blob/main/docs/BENCHMARK.md">BENCHMARK.md</a></p>
-      <ul>{BENCH_ONLY.map((id) => <li><b>{k(`wf.m.x.${id}`)}</b> <em>{k("wf.m.na")}</em></li>)}</ul>
+    <div class="bx" data-wf-x>
+      <h5 class="nj">{k("wf.bx.t")}</h5>
+      {benchCards.map((m) => (
+        <label class="mc na bench">
+          <input type="radio" name="wf-m-x" value={m.id} disabled />
+          <span class="mt"><b>{m.name}</b><em>{k("wf.m.na")}</em></span>
+          <span class="mw">{m.why}</span>
+          {m.lines.map((l) => <span class="mw bs" data-for={l.id}>{l.t}</span>)}
+          <span class="mw bs js" data-for="">{k("wf.bx.none")}</span>
+        </label>
+      ))}
     </div>
     <div class="wf-toast js" role="status" aria-live="assertive" data-wf-toast hidden></div>
 
@@ -251,7 +266,11 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
       const r = run();
       runs.forEach((x) => x.classList.toggle("on", x === r));
       root.dataset.step = String(step);
-      r.querySelector(".p3 .nav")!.before(shared);
+      r.querySelector(".p3 .ms")!.append(shared);
+      shared.querySelectorAll<HTMLElement>("[data-for]").forEach((l) => {
+        const own = l.dataset.for === sid;
+        l.hidden = l.dataset.for ? !own : !!shared.querySelector(`[data-for="${sid}"]`);
+      });
       nav.forEach((b) => {
         const n = Number(b.dataset.go);
         b.disabled = n > reached;
@@ -362,17 +381,16 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   :root[data-theme="dark"] .wf { --wf-y: #f0b952; --wf-r: #ff8f85; }
   .wf .rec .mw { color: var(--accent-ink); font-weight: 600; }
   .wf .alt .mw, .wf .alt em { color: var(--wf-y); }
-  .wf .na .mw, .wf .na em, .wf .mx .mw, .wf .mx em { color: var(--wf-r); }
-  .wf .mc.alt em, .wf .mc.na em, .wf .mx em { background: none; border: 1px solid currentColor; }
+  .wf .na .mw, .wf .na em { color: var(--wf-r); }
+  .wf .mc.na em { background: none; border: 1px solid currentColor; }
   .wf .mc.na { cursor: not-allowed; background: var(--panel); }
   .wf .mc.na b { color: var(--ink-2); }
   .wf .mc.na .bar i { opacity: 0.35; }
-  .wf .mx { margin-top: var(--s-3); padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--radius); font-size: var(--text-sm); }
-  .wf .mx ul { margin: var(--s-2) 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; }
-  .wf .mx b { font-weight: 600; color: var(--ink-2); }
-  .wf .mx h5, .wf .mx p { margin: 0; }
-  .wf .mx p { margin-top: 4px; }
-  .wf .mx a { color: var(--accent-ink); }
+  .wf .bs { display: block; }
+  .wf .bx { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--s-3); margin-top: var(--s-4); }
+  .wf .bx .nj { grid-column: 1 / -1; margin: 0; }
+  .wf-js .wf .bx { display: contents; }
+  .wf-js .wf .nj, .wf [data-for][hidden] { display: none; }
   .wf-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(92vw, 420px); padding: 10px 16px; border-radius: var(--radius); background: var(--ink); color: var(--bg); font-size: var(--text-sm); font-weight: 600; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
   .wf-toast[hidden] { display: none; }
   .wf .bar { display: block; height: 8px; margin-top: 4px; border-radius: 4px; background: var(--panel); }
@@ -416,6 +434,4 @@ const P = [1, 2, 3, 4].map((n) => k(`wf.p${n}`));
   .wf-js .wf[data-step="1"] .p1, .wf-js .wf[data-step="2"] .p2, .wf-js .wf[data-step="3"] .p3, .wf-js .wf[data-step="4"] .p4 { display: block; }
   .wf-js .wf:not([data-step="4"]) .badge, .wf-js .wf:not([data-step="2"]) .cap, .wf-js .wf[data-step="3"] .chartbox { display: none; }
   .wf-js .wf:not([data-step="4"]) :is(.fc, .b80, .b95, .fcl) { display: none; }
-  .wf-js .wf .mx { display: none; }
-  .wf-js .wf[data-step="3"] .run.on .mx { display: block; }
 </style>

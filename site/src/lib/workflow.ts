@@ -52,8 +52,7 @@ export const PROD_MODELS = ["MSTL", "AutoTheta", "Naive", "SeasonalNaive"] as co
 /** Imported in src/ailab/forecast.py but deliberately not a candidate: "statsforecast does not fit a seasonal ETS at weekly
  *  period 52, so it collapses to Naive" (forecast.py docstring, docs/METHODS.md). */
 export const EXCLUDED_ETS = "AutoETS";
-/** Tried in benchmarks/forecast_bench.py, not adopted (docs/BENCHMARK.md §2): series-independent, listed once. */
-export const BENCH_ONLY = ["SWA3", "MSTL_ARIMA", "ENS_mstl_theta", "ENS_mstl_theta_swa"] as const;
+
 export interface Overview {
   from: string; to: string; n: number; seasons: number; missing: number; missingFrac: number; longestGap: number;
   last: { ds: string; y: number } | null; year: { min: number; max: number } | null;
