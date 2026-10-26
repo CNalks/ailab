@@ -22,8 +22,8 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 
 National or supra-national aggregates only; no sub-national or community-level data.
 
-## Gate walkthrough (home page, right after the hero)
-"Pick a series, run the gate" (`site/src/components/SequenceWorkflow.astro`): the visitor picks one of the real series
+## Check walkthrough (home page, right after the hero)
+"Pick a series, walk through the checks" (`site/src/components/SequenceWorkflow.astro`): the visitor picks one of the real series
 and runs it; the page then reveals, step by step, the result the engine recorded at build time — load data → data
 checks → rolling-origin backtest → decision (allowed / limited / refused, `forecast_allowed`, `reason`, `reason_codes`,
 the trilingual reason messages and the recommended action). Nothing is computed in the browser and nothing is mocked:
