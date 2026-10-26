@@ -1,0 +1,29 @@
+---
+// "Run a forecast" page (/forecast/, /en/forecast/, /fr/forecast/): the four-step walkthrough on its own page,
+// reached from the home-page hero button.
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SequenceWorkflow from "../components/SequenceWorkflow.astro";
+import { t } from "../i18n";
+import { localizePath, type Locale } from "../i18n/config";
+
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const home = localizePath("/", locale);
+---
+
+<BaseLayout locale={locale} title={`${t(locale, "wf.title")} · ailab`} description={t(locale, "fc.meta.desc")}>
+  <nav class="crumb container" aria-label={t(locale, "fc.crumb")}>
+    <ol><li><a href={home}>{t(locale, "fc.home")}</a></li><li aria-current="page">{t(locale, "wf.title")}</li></ol>
+  </nav>
+  <SequenceWorkflow locale={locale} h="h1" />
+  <p class="back container"><a href={home}>← {t(locale, "fc.back")}</a></p>
+</BaseLayout>
+
+<style>
+  .crumb { padding-top: var(--s-5); font-size: var(--text-sm); }
+  .crumb ol { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0; padding: 0; list-style: none; color: var(--muted); }
+  .crumb li + li::before { content: "›"; margin-right: var(--s-2); }
+  .crumb a, .back a { color: var(--accent-ink); }
+  .back { padding-bottom: var(--s-7); font-size: var(--text-sm); font-weight: 600; }
+  .crumb ~ :global(.wf) { padding-top: var(--s-5); }
+</style>

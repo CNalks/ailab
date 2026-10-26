@@ -15,10 +15,10 @@ interface Props {
 const { locale, neutralPath } = Astro.props;
 const home = localizePath("/", locale);
 const nav: NavItem[] = Astro.props.nav ?? [
-  { href: `${home}#series`, label: t(locale, "nav.series") },
+  { href: localizePath("/forecast/", locale), label: t(locale, "nav.forecast") },
   { href: `${home}#pipeline`, label: t(locale, "nav.pipeline") },
-  { href: `${home}#quickstart`, label: t(locale, "nav.quickstart") },
   { href: `${home}#methods`, label: t(locale, "nav.methods") },
+  { href: `${home}#quickstart`, label: t(locale, "nav.quickstart") },
   { href: `${home}#licences`, label: t(locale, "nav.licences") },
   { href: "https://github.com/CNalks/ailab", label: t(locale, "nav.github") }
 ];
@@ -33,7 +33,7 @@ const nav: NavItem[] = Astro.props.nav ?? [
     <nav class="nav desktop" aria-label={t(locale, "nav.label")}>
       <ul>
         {nav.map((item) => (
-          <li><a href={item.href} >{item.label}</a></li>
+          <li><a href={item.href} aria-current={item.href === Astro.url.pathname ? "page" : undefined}>{item.label}</a></li>
         ))}
       </ul>
     </nav>
@@ -47,7 +47,7 @@ const nav: NavItem[] = Astro.props.nav ?? [
       <nav class="sheet" aria-label={t(locale, "nav.label")}>
         <ul>
           {nav.map((item) => (
-            <li><a href={item.href} >{item.label}</a></li>
+            <li><a href={item.href} aria-current={item.href === Astro.url.pathname ? "page" : undefined}>{item.label}</a></li>
           ))}
         </ul>
       </nav>

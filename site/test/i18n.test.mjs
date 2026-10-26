@@ -36,7 +36,7 @@ test("walkthrough + evidence keys are translated (no Chinese in en / fr)", () =>
 });
 
 test("rendered en / fr walkthrough has no Chinese text", () => {
-  for (const f of ["en/index.html", "fr/index.html"]) {
+  for (const f of ["en/forecast/index.html", "fr/forecast/index.html"]) {
     const html = fs.readFileSync(path.join(root, "dist", f), "utf-8");
     const sec = html.match(/<section class="wf" id="workflow"[\s\S]*?<\/section>/)[0];
     assert.ok(!CJK.test(sec.replace(/<[^>]+>/g, "")), f);

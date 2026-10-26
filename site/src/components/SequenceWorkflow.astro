@@ -7,13 +7,15 @@ import SeriesChart from "./SeriesChart.astro";
 import Basis from "./WfBasis.astro";
 import { runs, type StepState, type Why } from "../lib/workflow";
 import { bench, BENCH_SCENARIO } from "../lib/bench";
-import { sources } from "../lib/data";
+import { manifest, sources } from "../lib/data";
 import { asset, msgKey, type Locale } from "../i18n/config";
 import { t, type MessageKey } from "../i18n";
 import { formatDate, formatNumber, formatPercent } from "../i18n/format";
 
-interface Props { locale: Locale }
-const { locale } = Astro.props;
+interface Props { locale: Locale; /** h1 on the forecast page */ h?: "h1" | "h2" }
+const { locale, h = "h2" } = Astro.props;
+const H = h;
+const dlOf = Object.fromEntries(manifest().series.map((m) => [m.series_id, m.download ? asset(`/data/${m.download}`) : null]));
 const mk = msgKey[locale];
 const k = (key: string, p?: Record<string, string | number>) => t(locale, key as MessageKey, p);
 const st = (s: StepState) => k(`wf.st.${s}`);
@@ -102,7 +104,7 @@ const benchCards = B.methods.map((m) => ({
 <script is:inline>document.documentElement.classList.add("wf-js")</script>
 <section class="wf" id="workflow" aria-labelledby="wf-t" data-wf data-step="1" data-done={k("wf.done")} data-stp={k("wf.stp")} data-p={P.join("|")} data-demo={k("wf.m.demo")}>
   <div class="container">
-    <h2 id="wf-t">{k("wf.title")}</h2>
+    <H id="wf-t">{k("wf.title")}</H>
     <p class="wf-lead">{k("wf.lead")}</p>
     <noscript><p class="wf-note">{k("wf.nojs")}</p></noscript>
 
@@ -139,10 +141,11 @@ const benchCards = B.methods.map((m) => ({
         <div class="pn p2">
           <h4 class="ph" tabindex="-1">② {k("wf.p2.t")}</h4>
           <dl class="ov">{r.ov.map(([a, b]) => <div><dt>{a}</dt><dd>{b}</dd></div>)}</dl>
+          <p class="go">{k("wf.dl")} <a href={asset(`/data/series/${r.id}.json`)}>JSON</a>{dlOf[r.id] && <a href={dlOf[r.id]}>Parquet</a>}</p>
         </div>
 
         <div class="chartbox">
-          <SeriesChart res={r.res} locale={locale} name={r.name} gateLabel={r.gateLabel} compact />
+          <SeriesChart res={r.res} locale={locale} name={r.name} gateLabel={r.gateLabel} />
           <ul class="legend" role="list">
             <li><i class="k hist"></i>{k("chart.history")}</li>
             {r.forecastAllowed && <li class="fcl"><i class="k fc"></i>{k("chart.forecast")}</li>}
@@ -213,7 +216,6 @@ const benchCards = B.methods.map((m) => ({
           {r.pts.length > 0 && <ul class="pts fcl">{r.pts.map((x) => <li>{x}</li>)}</ul>}
           <p class="out">{r.outcome}{r.act && <> · {k("wf.act")}: {r.act}</>}</p>
           <Basis r={r} locale={locale} />
-          <p class="go"><a href={`#s-${r.id}`}>{k("wf.goto")} ↓</a></p>
           <div class="nav js"><button type="button" data-to="3">{k("wf.prev")}</button><button type="button" data-to="1">{k("wf.reset")}</button></div>
         </div>
         </>}
@@ -325,7 +327,7 @@ const benchCards = B.methods.map((m) => ({
 
 <style is:global>
   .wf { padding: clamp(40px, 6vw, 72px) 0; }
-  .wf h2 { font-size: var(--text-2xl); letter-spacing: -0.02em; }
+  .wf #wf-t { font-size: var(--text-2xl); letter-spacing: -0.02em; }
   .wf-lead { margin-top: var(--s-3); color: var(--ink-2); max-width: 72ch; }
   .wf-note { margin-top: var(--s-4); color: var(--muted); font-size: var(--text-sm); max-width: 80ch; }
   html:not(.wf-js) .wf .js { display: none; }
@@ -436,7 +438,7 @@ const benchCards = B.methods.map((m) => ({
   .wf .pol code { min-width: 0; overflow-wrap: anywhere; }
   .wf pre { margin: var(--s-2) 0 0; padding: var(--s-3); overflow-x: auto; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); font: 12px/1.6 var(--font-mono); }
   .wf pre code { padding: 0; background: none; }
-  .wf .go { margin-top: var(--s-3); display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
+  .wf .go { margin-top: var(--s-3); display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); font-size: var(--text-sm); color: var(--ink-2); }
   .wf .go a { color: var(--accent-ink); font-weight: 600; font-size: var(--text-sm); }
 
   /* no JS: every series stacked with overview, methods and result; step 1 and the buttons are hidden */
