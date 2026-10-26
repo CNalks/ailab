@@ -216,6 +216,11 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     assert.deepEqual(order, ["hero-title", "what-title", "pipeline", "methods", "quickstart", "licences"]);
     const qs = homeHtml.match(/<section class="[^"]*" id="quickstart"[\s\S]*?<\/section>/)[0];
     assert.ok(!/<a class="btn|<button/.test(qs), "quick start has no buttons");
+    const h1 = homeHtml.match(/<h1 id="hero-title"[^>]*>([\s\S]*?)<\/h1>/)[1];
+    if (locale === "zh-cn") {
+      assert.deepEqual([...h1.matchAll(/<span[^>]*>([^<]+)<\/span>/g)].map((m) => m[1]), ["未有明征休妄断，", "宁将一默胜虚辞。"], "h1 = lines 3–4");
+      assert.match(homeHtml, /<p class="verse"[^>]*><span[^>]*>潮来潮去自成期，<\/span><span[^>]*>旧岁回看始自知。<\/span><\/p>/, "lines 1–2 above the h1");
+    } else assert.ok(!homeHtml.includes('class="verse"') && /<br[ >]/.test(h1), "en / fr title unchanged");
     if (locale === "zh-cn") assert.equal((strip(homeHtml.match(/<main[\s\S]*<\/main>/)[0]).match(/闸门/g) || []).length, 5, "质量闸门 only in the 5 intro spots");
   });
 

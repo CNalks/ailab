@@ -24,7 +24,8 @@ export const zhCN = {
   "footer.disclaimer": "统计分析结果，不是官方产品，不用于临床或公共卫生决策。",
 
   "hero.kicker": "ailab · v0.3.0",
-  "hero.title": "能预测时才预测，\n不靠谱时明确拒绝。",
+  "hero.verse": "潮来潮去自成期，\n旧岁回看始自知。",
+  "hero.title": "未有明征休妄断，\n宁将一默胜虚辞。",
   "hero.sub": "ailab 是面向传染病监测的开源时间序列引擎。每个预测都必须在滚动回测中打败季节朴素基线；做不到，质量闸门会告诉你为什么不预测。",
   "hero.cta1": "做一次预测",
   "hero.cta2": "查看 GitHub",

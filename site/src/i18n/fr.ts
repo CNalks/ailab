@@ -25,6 +25,7 @@ export const fr: Record<MessageKey, string> = {
   "footer.disclaimer": "Analyse statistique uniquement : produit non officiel, à ne pas utiliser pour des décisions cliniques ou de santé publique.",
 
   "hero.kicker": "ailab · v0.3.0",
+  "hero.verse": "",
   "hero.title": "Prévoir quand c’est honnête.\nRefuser quand ça ne l’est pas.",
   "hero.sub": "ailab est un moteur open source de séries temporelles pour la surveillance des maladies infectieuses. Chaque prévision doit battre une référence saisonnière lors d’un rétro-test glissant ; sinon, la porte qualité explique pourquoi elle ne prévoit pas.",
   "hero.cta1": "Faire une prévision",

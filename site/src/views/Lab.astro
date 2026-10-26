@@ -12,6 +12,8 @@ const srcById = Object.fromEntries(srcs.map((s) => [s.source_id, s]));
 const results = SERIES_IDS.map((id) => ({ id, res: series(id) }));
 const used = new Set(results.map((r) => r.res.series.source_id));
 const lines = (s: string) => s.split("\n");
+// zh hero: a seven-character quatrain — lines 1–2 as a small lead-in, lines 3–4 as the h1 (en / fr: empty, plain title)
+const verse = t(locale, "hero.verse");
 const steps = [1, 2, 3, 4] as const;
 const rows = [1, 2, 3, 4, 5, 6] as const;
 const gb = "https://github.com/CNalks/ailab/blob/main";
@@ -36,7 +38,14 @@ const gh = "https://github.com/CNalks/ailab";
   <section class="hero" aria-labelledby="hero-title">
     <div class="container hero-in">
       <p class="eyebrow" data-rise style="--d:0">{t(locale, "hero.kicker")}</p>
-      <h1 id="hero-title" data-rise style="--d:1">{lines(t(locale, "hero.title")).map((l, i) => <>{i > 0 && <br />}{l}</>)}</h1>
+      {verse ? (
+        <>
+          <p class="verse" data-rise style="--d:1">{lines(verse).map((l) => <span>{l}</span>)}</p>
+          <h1 id="hero-title" class="poem" data-rise style="--d:2">{lines(t(locale, "hero.title")).map((l) => <span>{l}</span>)}</h1>
+        </>
+      ) : (
+        <h1 id="hero-title" data-rise style="--d:1">{lines(t(locale, "hero.title")).map((l, i) => <>{i > 0 && <br />}{l}</>)}</h1>
+      )}
       <p class="sub" data-rise style="--d:2">{t(locale, "hero.sub")}</p>
       <div class="cta" data-rise style="--d:3">
         <a class="btn primary press" href={localizePath("/forecast/", locale)}>{t(locale, "hero.cta1")}</a>
@@ -166,6 +175,9 @@ const gh = "https://github.com/CNalks/ailab";
   .hero-in { display: flex; flex-direction: column; align-items: center; gap: var(--s-4); }
   .eyebrow { font-size: var(--text-sm); font-weight: 600; color: var(--data); letter-spacing: 0.02em; font-family: var(--font-mono); }
   h1 { font-size: var(--text-display); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
+  .verse { display: flex; flex-direction: column; gap: 0.35em; margin-top: var(--s-3); font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC", serif; font-size: clamp(1rem, 0.9rem + 0.5vw, 1.25rem); letter-spacing: 0.12em; color: var(--muted); }
+  .verse span, .poem span { display: block; white-space: nowrap; }
+  .poem { font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC", serif; font-weight: 700; font-size: min(var(--text-display), 9.6vw); line-height: 1.25; letter-spacing: 0.04em; margin-top: var(--s-4); margin-bottom: var(--s-4); }
   .sub { max-width: 62ch; color: var(--ink-2); font-size: var(--text-lg); }
   .cta { display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: center; margin-top: var(--s-3); }
   .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: var(--radius-pill); font-weight: 600; font-size: 15px; text-decoration: none; color: var(--accent-ink); background: var(--accent-soft); transition: background-color var(--dur-base) var(--ease-apple), color var(--dur-base) var(--ease-apple); }
