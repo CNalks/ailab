@@ -16,6 +16,17 @@ const DAY = 86400000;
 const LANE_LABEL: Record<string, string> = { ears_c1: "C1", ears_c2: "C2", ears_c3: "C3", cusum: "CUSUM", farrington: "FARR" };
 const ts = (d: string) => Date.parse(d + "T00:00:00Z");
 const r1 = (n: number) => Math.round(n * 10) / 10;
+/** Path through the points with relative "l" steps between the 0.1-rounded absolute positions (same geometry, ~35% fewer bytes). */
+const rel = (pts: [number, number][]) => {
+  const q = pts.map(([x, y]) => [Math.round(x * 10), Math.round(y * 10)]);
+  const n = (v: number) => String(v / 10).replace(/^(-?)0\./, "$1.");
+  let out = `M${n(q[0][0])},${n(q[0][1])}l`;
+  for (let i = 1; i < q.length; i++) {
+    const dy = q[i][1] - q[i - 1][1];
+    out += (i > 1 ? " " : "") + n(q[i][0] - q[i - 1][0]) + (dy < 0 ? "" : ",") + n(dy);
+  }
+  return out;
+};
 
 function niceTicks(max: number, n = 4): number[] {
   const raw = max / n;
@@ -55,7 +66,7 @@ export function buildChart(res: SeriesResult, o: ChartOpts): Chart {
   let seg: [number, number][] = [];
   const flush = () => {
     if (seg.length === 1) dots.push({ x: r1(seg[0][0]), y: r1(seg[0][1]) });
-    else if (seg.length > 1) hist += "M" + seg.map(([x, y]) => `${r1(x)},${r1(y)}`).join("L");
+    else if (seg.length > 1) hist += rel(seg);
     seg = [];
   };
   const missingXs: number[] = [];

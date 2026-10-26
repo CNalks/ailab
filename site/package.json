@@ -8,7 +8,8 @@
     "data": "cd .. && uv run python scripts/build_showcase_data.py",
     "dev": "astro dev",
     "build": "astro check && astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test": "node --test test/"
   },
   "dependencies": {
     "@cnalks/design-tokens": "github:CNalks/design-tokens#v0.1.0",
