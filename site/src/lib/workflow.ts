@@ -31,6 +31,18 @@ export interface Run {
   backtest: { state: StepState; reasons: GateReason[] };
   /** backtest numbers when a candidate model was chosen */
   skill: null | { model: string; rel: number; maxRel: number; cov80: number | null };
+  /** step ② numbers, read or computed from the series JSON */
+  overview: Overview;
+  /** step ③: every model that went through the rolling backtest (non-baseline by MAE, baseline last); empty without a backtest */
+  methods: Method[];
+  /** recommended method = backtest.chosen_model (asserted to be the lowest-MAE candidate); null when nothing may be forecast */
+  rec: string | null;
+}
+export interface Method { id: string; mae: number; rel: number; baseline: boolean; recommended: boolean; beatsBaseline: boolean }
+export interface Overview {
+  from: string; to: string; n: number; seasons: number; missing: number; missingFrac: number; longestGap: number;
+  last: { ds: string; y: number } | null; year: { min: number; max: number } | null;
+  seasonal: number | null; seasonalCut: number | null;
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -83,9 +95,46 @@ export function assertRun(id: string, res: SeriesResult): Run {
     skill = { model: bt.chosen_model, rel: rel as number, maxRel: maxRel as number, cov80: res.forecast?.calibration?.["80"]?.empirical_loo ?? null };
   }
   if (g.decision !== "refused" && !skill) fail("forecast allowed without a chosen backtest model");
+  // 4. step ③: the recommendation is the recorded chosen model, and it must really be the lowest-MAE candidate
+  const btx = bt as (NonNullable<typeof bt> & { baseline?: string }) | null;
+  let methods: Method[] = [];
+  if (btx) {
+    const base = btx.baseline ?? fail("backtest without baseline");
+    const ms = Object.entries(btx.models);
+    if (!btx.models[base]) fail(`baseline ${base} missing from backtest.models`);
+    for (const [m, v] of ms) if (typeof v.mae !== "number" || typeof v.rel_mae_vs_seasonal_naive !== "number") fail(`backtest.models.${m} lacks mae / rel_mae`);
+    const cands = ms.filter(([m]) => m !== base).sort((a, b) => a[1].mae - b[1].mae);
+    if (!cands.length) fail("no candidate model in backtest.models");
+    if (btx.chosen_model && btx.chosen_model !== cands[0][0]) fail(`chosen_model ${btx.chosen_model} is not the lowest-MAE candidate ${cands[0][0]}`);
+    if (res.forecast && res.forecast.model !== btx.chosen_model) fail(`forecast.model ${res.forecast.model} != chosen_model`);
+    const maxRel = g.thresholds?.max_rel_mae ?? 1;
+    methods = [...cands, ms.find(([m]) => m === base)!].map(([m, v]) => ({
+      id: m, mae: v.mae, rel: v.rel_mae_vs_seasonal_naive as number, baseline: m === base,
+      recommended: g.decision !== "refused" && m === btx.chosen_model,
+      beatsBaseline: m !== base && (v.rel_mae_vs_seasonal_naive as number) < maxRel
+    }));
+  }
+  const rec = methods.find((m) => m.recommended)?.id ?? null;
+  if ((rec !== null) !== p.forecast_allowed) fail("a recommendation exists iff the forecast is allowed");
+  // 5. step ②: overview numbers
+  const q = res.quality;
+  const gm = (res.gate as { metrics?: Record<string, unknown> }).metrics ?? {};
+  const obs = res.observations;
+  const lastI = obs.map((o) => o.y).findLastIndex((y) => y != null);
+  const last = lastI < 0 ? null : { ds: obs[lastI].ds, y: obs[lastI].y as number };
+  if (last && last.ds !== q.data_through) fail(`last observation ${last.ds} != quality.data_through`);
+  const yr = obs.slice(-52).map((o) => o.y).filter((y): y is number => y != null);
+  const num = (k: string) => (typeof gm[k] === "number" ? (gm[k] as number) : null);
+  const overview: Overview = {
+    from: q.data_from, to: q.data_through, n: q.n_weeks, seasons: num("seasons") ?? q.n_weeks / 52, missing: q.n_missing,
+    missingFrac: num("missing_frac") ?? q.n_missing / q.n_weeks, longestGap: num("longest_gap") ?? 0, last,
+    year: yr.length ? { min: Math.min(...yr), max: Math.max(...yr) } : null,
+    seasonal: num("seasonal_strength"), seasonalCut: g.thresholds?.min_seasonal_strength ?? null
+  };
+  if (obs.length !== q.n_weeks || obs.filter((o) => o.y == null).length !== q.n_missing) fail("observations disagree with quality.n_weeks / n_missing");
   return {
     id, res, decision: g.decision, forecastAllowed: p.forecast_allowed, reason: p.reason, reasonCodes: [...g.reason_codes],
-    data: { state: dataState, reasons: dataR }, backtest: { state: btState, reasons: btR }, skill
+    data: { state: dataState, reasons: dataR }, backtest: { state: btState, reasons: btR }, skill, overview, methods, rec
   };
 }
 

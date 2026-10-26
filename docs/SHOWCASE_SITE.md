@@ -23,12 +23,27 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 National or supra-national aggregates only; no sub-national or community-level data.
 
 ## Forecast walkthrough (home page, right after the hero)
-"Forecast this series" (`site/src/components/SequenceWorkflow.astro`): the visitor already has a real series
-(default US wILI). The history chart is shown first; the primary action is **Forecast** (policy horizon). Only after
-the click do forecast bands (when allowed/limited) and the decision badge appear. Switching series is a compact
-`<select>` (“Switch series”) and resets to history-only. “Basis” holds the four recorded steps; reproduce CLI is
-secondary. Without JavaScript every series is listed in its post-forecast state. `workflow.ts` fails the build on
-data inconsistency. `npm test` checks fidelity, i18n, and the ≤ +15 KB HTML budget vs main.
+"Run a forecast" (`site/src/components/SequenceWorkflow.astro`) walks the visitor through four steps, one at a time:
+
+1. **Choose the series**: one radio row per real series (name, geography, weekly, length, publisher). No outcome is shown here.
+2. **Data overview**: time span, frequency, length (≈ seasons), latest value, last-52-week range, missing weeks and longest gap,
+   seasonality (`gate.metrics.seasonal_strength` against `thresholds.min_seasonal_strength`) and the history chart; then the
+   data check-up findings in plain words (the data-stage `gate.reasons`).
+3. **Choose a method**: one card per model that went through the rolling-origin backtest (`backtest.models`: Naive, MSTL,
+   AutoTheta and the SeasonalNaive baseline), with the mean absolute error, a bar, and the error relative to the baseline.
+   The **recommended** card is `backtest.chosen_model`; `workflow.ts` fails the build unless it is the lowest-MAE candidate
+   and equals `forecast.model`. It is pre-selected with a one-line reason. Limited series state the limits; refused series
+   explain why nothing is recommended (thin backtest) or why there are no methods (data check blocked).
+4. **Result**: the decision badge (allowed / limited / refused), the forecast band, the first and last forecast week with
+   the 80% band, the outcome line, and the collapsed **Basis and limits** (the four recorded steps). The static site only
+   publishes the forecast of the recommended method: picking another method shows its backtest score and a note, with a
+   button to switch back. Showing every method's own forecast would need the export to write per-model `forecast` points
+   and interval widths (`interval_widths(bt, model)` per candidate).
+
+A stepper and Back buttons move between steps; choosing another series resets to step 1 and the recommended method.
+Without JavaScript every series is listed with its overview, methods and result (step 1 and the buttons are hidden).
+Reproduce (CLI / `jq`) is secondary. `npm test` checks fidelity to the JSON, i18n, and the ≤ +15 KB HTML budget vs main.
+`SeriesChart` styles are global (prefixed `.chart`) so SVG nodes carry no `data-astro-cid` attribute.
 
 
 ## Refresh data
