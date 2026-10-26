@@ -6,7 +6,7 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 
 | | |
 |---|---|
-| URL | `https://www.cnalks.cn/ai4health/lab/` (zh), `/en/`, `/fr/` |
+| URL | `https://www.cnalks.cn/ai4health/lab/` (zh), `/en/`, `/fr/`; forecast walkthrough at `…/forecast/`, `/en/forecast/`, `/fr/forecast/` |
 | Stack | Astro 5 static build, shared tokens `github:CNalks/design-tokens#v0.1.0` (tokens.css, motion.css, reveal.ts), light default + light/dark toggle (shared `cnalks-theme` key with cnalks.cn) |
 | Charts | build-time inline SVG (no chart library, 0 KB of chart JS), CSS variables for both themes, a data table per series as the text alternative |
 | Data | `site/public/data/` written by `scripts/build_showcase_data.py` with the real pipeline (`ailab.pipeline.analyse` + `ailab.export.export_site`), format: [EXPORT_FORMAT.md](EXPORT_FORMAT.md) |
@@ -22,10 +22,21 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 
 National or supra-national aggregates only; no sub-national or community-level data.
 
-## Forecast walkthrough (home page, right after the hero)
+## Pages
+* **Home** (`src/views/Lab.astro`), in this order: hero (primary button "Run a forecast" → the forecast page, secondary
+  GitHub), three ways to use it, "From a weekly series to a trustworthy signal" (four plain-language steps: tidy the data,
+  quality gate, forecast, unusual weeks), methods + Basis and limits, quick start (Docker / Python / API snippets and doc
+  links, no buttons), licences and sources. Old in-page anchors of the walkthrough and the removed series cards
+  (`#workflow`, `#series`, `#s-<id>`) are sent to the forecast page by a two-line inline script.
+* **Forecast** (`src/views/Forecast.astro`): breadcrumb (ailab home › Run a forecast), the walkthrough below with its
+  title as `h1`, and a "Back to the home page" link. The header nav links it (marked `aria-current` there).
+
+## Forecast walkthrough (`/forecast/`)
 "Run a forecast" (`site/src/components/SequenceWorkflow.astro`) walks the visitor through four steps, one at a time:
 
 1. **Choose the series**: one radio row per real series (name, geography, weekly, length, publisher). No outcome is shown here.
+   (The per-series cards that used to follow the walkthrough on the home page are gone; their JSON / Parquet downloads
+   are now in step ②.)
 2. **Data overview**: time span, frequency, length (≈ seasons), latest value, last-52-week range, missing weeks and longest gap,
    seasonality (`gate.metrics.seasonal_strength` against `thresholds.min_seasonal_strength`) and the history chart; then the
    data check-up findings in plain words (the data-stage `gate.reasons`). If a series has **no selectable method** (all
@@ -63,7 +74,9 @@ National or supra-national aggregates only; no sub-national or community-level d
 A stepper and Back buttons move between steps; choosing another series resets to step 1 and the recommended method.
 Without JavaScript every series is listed with its overview, methods and result (step 1 and the buttons are hidden);
 stopped series show only the overview, the red conclusion and Basis and limits.
-Reproduce (CLI / `jq`) is secondary. `npm test` checks fidelity to the JSON, i18n, and the ≤ +15 KB HTML budget vs main.
+Reproduce (CLI / `jq`) is secondary. `npm test` checks fidelity to the JSON, i18n, the home page structure, the ≤ +15 KB
+home-page HTML budget vs 15f585e, and that the forecast page is not larger than the home page that carried the walkthrough
+(a3e5190).
 `SeriesChart` styles are global (prefixed `.chart`) so SVG nodes carry no `data-astro-cid` attribute, and history paths use
 relative `l` steps between the same 0.1-rounded points (identical geometry, fewer bytes).
 

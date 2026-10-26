@@ -1,4 +1,5 @@
-// Post-build checks for the four-step "run a forecast" walkthrough (run after `npm run build`: `npm test`).
+// Post-build checks for the four-step "run a forecast" walkthrough on /forecast/ (run after `npm run build`: `npm test`)
+// and for the home page that links to it.
 // Every run must repeat site/public/data verbatim in all three languages; nothing is mocked.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -12,7 +13,8 @@ const data = path.join(here, "..", "public", "data");
 const read = (p) => fs.readFileSync(p, "utf-8");
 const json = (rel) => JSON.parse(read(path.join(data, rel)));
 const manifest = json("manifest.json");
-const PAGES = { "zh-cn": ["index.html", "zh"], en: ["en/index.html", "en"], fr: ["fr/index.html", "fr"] };
+const PAGES = { "zh-cn": ["forecast/index.html", "zh"], en: ["en/forecast/index.html", "en"], fr: ["fr/forecast/index.html", "fr"] };
+const HOME = { "zh-cn": ["index.html", "/ai4health/lab/"], en: ["en/index.html", "/ai4health/lab/en/"], fr: ["fr/index.html", "/ai4health/lab/fr/"] };
 const EV_TITLE = { "zh-cn": "依据与边界", en: "Basis and limits", fr: "Fondements et limites" };
 const BACKTEST_CODES = new Set(["insufficient_backtest", "short_backtest_span", "backtest_worse_than_baseline", "marginal_skill",
   "skill_horizon_too_short", "no_skill_beyond_persistence", "interval_undercoverage"]);
@@ -54,8 +56,9 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
       assert.ok(r.body.includes(`<code>reason: ${s.policy.reason}</code>`));
       assert.ok(r.body.includes(`<code>reason_codes: [${s.gate.reason_codes.join(", ")}]</code>`));
       assert.deepEqual(m.gate.reason_codes, s.gate.reason_codes);
-      assert.ok(html.includes(`id="s-${r.id}"`));
-      if (!r.stop) assert.ok(r.body.includes(`href="#s-${r.id}"`), "anchor to the full card");
+      assert.ok(!r.body.includes(`href="#s-`), "no link to the removed series cards");
+      assert.ok(r.body.includes(`href="/ai4health/lab/data/series/${r.id}.json"`), `${r.id}: JSON download in step ②`);
+      if (m.download) assert.ok(panel(r.body, 2).includes(`href="/ai4health/lab/data/${m.download}"`), `${r.id}: Parquet download in step ②`);
       assert.equal((r.body.match(/<svg class="chart/g) || []).length, 1, `${r.id}: one chart shared by steps ② and ④`);
       assert.match(r.body, new RegExp(`class="badge" data-gate="${r.decision}"`));
       if (s.policy.forecast_allowed) assert.match(r.body, /<path class="b80"/, `${r.id}: forecast band in the chart`);
@@ -193,7 +196,31 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     assert.match(css, /\.wf-js \.wf\[data-step="4"\] \.p4\{display:block\}/);
   });
 
+  test(`${locale}: forecast page has an h1, breadcrumb and a way back home`, () => {
+    const home = HOME[locale][1];
+    assert.match(sec, /<h1 id="wf-t">[^<]+<\/h1>/);
+    assert.match(html, new RegExp(`<nav class="crumb container[^"]*"[^>]*aria-label="[^"]+"[^>]*>\\s*<ol[^>]*><li[^>]*><a href="${home}"[^>]*>[^<]+</a></li><li aria-current="page"[^>]*>[^<]+</li></ol>`));
+    assert.match(html, new RegExp(`<p class="back container[^"]*"[^>]*><a href="${home}"[^>]*>`));
+    assert.match(html, new RegExp(`<a href="${home}forecast/" aria-current="page"`), "nav marks the forecast page");
+  });
+
+  const homeHtml = read(path.join(dist, HOME[locale][0]));
+  test(`${locale}: home — walkthrough and series cards moved out, hero button goes to the forecast page, quick start after methods`, () => {
+    const home = HOME[locale][1];
+    assert.ok(!homeHtml.includes('id="workflow"') && !homeHtml.includes('class="wf"'), "no walkthrough on the home page");
+    assert.ok(!homeHtml.includes('id="series"') && !/id="s-[\w-]+"/.test(homeHtml) && !/href="[^"]*#(series|workflow|s-[\w-]+)"/.test(homeHtml), "no series cards or links to them");
+    const cta = homeHtml.match(/<div class="cta"[^>]*>([\s\S]*?)<\/div>/)[1];
+    assert.match(cta, new RegExp(`<a class="btn primary press"[^>]*href="${home}forecast/"`), "primary hero button -> forecast page");
+    assert.ok(!cta.includes("#quickstart"));
+    const order = [...homeHtml.matchAll(/<section class="[^"]*"(?: id="(\w+)")?[^>]*aria-labelledby="([\w-]+)"/g)].map((m) => m[1] || m[2]);
+    assert.deepEqual(order, ["hero-title", "what-title", "pipeline", "methods", "quickstart", "licences"]);
+    const qs = homeHtml.match(/<section class="[^"]*" id="quickstart"[\s\S]*?<\/section>/)[0];
+    assert.ok(!/<a class="btn|<button/.test(qs), "quick start has no buttons");
+    if (locale === "zh-cn") assert.equal((strip(homeHtml.match(/<main[\s\S]*<\/main>/)[0]).match(/闸门/g) || []).length, 5, "质量闸门 only in the 5 intro spots");
+  });
+
   test(`${locale}: old decision cards are gone, evidence block renamed`, () => {
+    const html = homeHtml;
     assert.ok(!html.includes('<article class="dc"') && !html.includes('id="decisions"'), "no enumerated decision cards");
     const h = html.match(/<h3 class="reveal sub-h" id="evidence"[^>]*>([^<]+)<\/h3>/);
     assert.ok(h, "evidence block kept");

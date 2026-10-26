@@ -1,5 +1,5 @@
-// Home-page HTML budget: at most 15,000 bytes over the main-branch build (15f585e, Astro 5.18) per language.
-// The baselines are the byte sizes of dist/{,en/,fr/}index.html built from main; update them only when main changes.
+// Home-page HTML budget: at most 15,000 bytes over the 15f585e build (Astro 5.18) per language. The forecast page
+// (/forecast/) may not exceed the home page that still carried the walkthrough (a3e5190).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -16,5 +16,14 @@ for (const [f, base] of Object.entries(MAIN)) {
     const delta = size - base;
     console.log(`${f}: ${size} B (main ${base}, +${delta}, ${BUDGET - delta} B left)`);
     assert.ok(delta <= BUDGET, `${f} is ${delta} B over main (budget ${BUDGET})`);
+  });
+}
+
+const WITH_DEMO = { "forecast/index.html": 142_512, "en/forecast/index.html": 142_984, "fr/forecast/index.html": 148_298 };
+for (const [f, cap] of Object.entries(WITH_DEMO)) {
+  test(`${f}: not larger than the home page with the walkthrough (${cap} B)`, () => {
+    const size = fs.statSync(path.join(dist, f)).size;
+    console.log(`${f}: ${size} B (cap ${cap}, ${cap - size} B left)`);
+    assert.ok(size <= cap, `${f} is ${size - cap} B over`);
   });
 }

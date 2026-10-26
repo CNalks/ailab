@@ -49,6 +49,7 @@ jobs:
       - name: Static output has the three languages and the data
         run: |
           test -s site/dist/index.html && test -s site/dist/en/index.html && test -s site/dist/fr/index.html
+          test -s site/dist/forecast/index.html && test -s site/dist/en/forecast/index.html && test -s site/dist/fr/forecast/index.html
           test -s site/dist/data/manifest.json && test -s site/dist/data/series/us_ilinet_wili.json
   e2e:
     # black-box API tests against a real `ailab serve` process (about 1.5 min)

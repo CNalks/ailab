@@ -1,21 +1,16 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import HealthBadge from "../components/HealthBadge.astro";
-import SeriesCard from "../components/SeriesCard.astro";
-import SequenceWorkflow from "../components/SequenceWorkflow.astro";
 import { t, type MessageKey } from "../i18n";
-import { formatDate } from "../i18n/format";
-import { htmlLang, type Locale } from "../i18n/config";
-import { manifest, sources, series, SERIES_IDS } from "../lib/data";
+import { htmlLang, localizePath, type Locale } from "../i18n/config";
+import { sources, series, SERIES_IDS } from "../lib/data";
 
 interface Props { locale: Locale }
 const { locale } = Astro.props;
-const man = manifest();
 const srcs = sources();
 const srcById = Object.fromEntries(srcs.map((s) => [s.source_id, s]));
-const results = SERIES_IDS.map((id) => ({ id, res: series(id), entry: man.series.find((m) => m.series_id === id) }));
+const results = SERIES_IDS.map((id) => ({ id, res: series(id) }));
 const used = new Set(results.map((r) => r.res.series.source_id));
-const built = formatDate(locale, man.generated_at.slice(0, 10));
 const lines = (s: string) => s.split("\n");
 const steps = [1, 2, 3, 4] as const;
 const rows = [1, 2, 3, 4, 5, 6] as const;
@@ -44,15 +39,13 @@ const gh = "https://github.com/CNalks/ailab";
       <h1 id="hero-title" data-rise style="--d:1">{lines(t(locale, "hero.title")).map((l, i) => <>{i > 0 && <br />}{l}</>)}</h1>
       <p class="sub" data-rise style="--d:2">{t(locale, "hero.sub")}</p>
       <div class="cta" data-rise style="--d:3">
-        <a class="btn primary press" href="#quickstart">{t(locale, "hero.cta1")}</a>
+        <a class="btn primary press" href={localizePath("/forecast/", locale)}>{t(locale, "hero.cta1")}</a>
         <a class="btn press" href={gh}>{t(locale, "hero.cta2")}</a>
       </div>
       <p class="chip" data-rise style="--d:4">{t(locale, "hero.chip")}</p>
       <HealthBadge locale={locale} where="hero" />
     </div>
   </section>
-
-  <SequenceWorkflow locale={locale} />
 
   <section class="block" aria-labelledby="what-title">
     <div class="container">
@@ -87,38 +80,6 @@ const gh = "https://github.com/CNalks/ailab";
     </div>
   </section>
 
-  <section class="block" id="series" aria-labelledby="series-title">
-    <div class="container">
-      <h2 id="series-title" class="reveal">{t(locale, "series.title")}</h2>
-      <p class="lead reveal">{t(locale, "series.lead", { built })}</p>
-      <div class="cards">
-        {results.map((r) => (
-          <div class="reveal"><SeriesCard id={r.id} res={r.res} entry={r.entry} source={srcById[r.res.series.source_id]} locale={locale} /></div>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <section class="block tint" id="quickstart" aria-labelledby="qs-title">
-    <div class="container">
-      <h2 id="qs-title" class="reveal">{t(locale, "qs.title")}</h2>
-      <p class="lead reveal">{t(locale, "qs.lead")}</p>
-      <div class="qs">
-        <div class="reveal"><h3>{t(locale, "qs.docker")}</h3><pre tabindex="0"><code>{qsDocker}</code></pre></div>
-        <div class="reveal"><h3>{t(locale, "qs.python")}</h3><pre tabindex="0"><code>{qsPy}</code></pre></div>
-        <div class="reveal"><h3>{t(locale, "qs.api")}</h3><pre tabindex="0"><code>{qsApi}</code></pre></div>
-      </div>
-      <p class="note reveal">{t(locale, "qs.note")}</p>
-      <h3 class="reveal sub-h">{t(locale, "qs.links")}</h3>
-      <ul class="links reveal" role="list">
-        <li><a href={`${gh}/blob/main/docs/API.md`}>{t(locale, "qs.l1")}</a></li>
-        <li><a href={`${gh}/blob/main/docs/TUTORIAL.md`}>{t(locale, "qs.l2")}</a></li>
-        <li><a href={`${gh}/blob/main/docs/MODEL_POLICY.md`}>{t(locale, "qs.l3")}</a></li>
-        <li><a href={gh}>{t(locale, "qs.l4")}</a></li>
-      </ul>
-    </div>
-  </section>
-
   <section class="block" id="methods" aria-labelledby="methods-title">
     <div class="container">
       <h2 id="methods-title" class="reveal">{t(locale, "methods.title")}</h2>
@@ -149,7 +110,27 @@ const gh = "https://github.com/CNalks/ailab";
     </div>
   </section>
 
-  <section class="block tint" id="licences" aria-labelledby="lic-title">
+  <section class="block tint" id="quickstart" aria-labelledby="qs-title">
+    <div class="container">
+      <h2 id="qs-title" class="reveal">{t(locale, "qs.title")}</h2>
+      <p class="lead reveal">{t(locale, "qs.lead")}</p>
+      <div class="qs">
+        <div class="reveal"><h3>{t(locale, "qs.docker")}</h3><pre tabindex="0"><code>{qsDocker}</code></pre></div>
+        <div class="reveal"><h3>{t(locale, "qs.python")}</h3><pre tabindex="0"><code>{qsPy}</code></pre></div>
+        <div class="reveal"><h3>{t(locale, "qs.api")}</h3><pre tabindex="0"><code>{qsApi}</code></pre></div>
+      </div>
+      <p class="note reveal">{t(locale, "qs.note")}</p>
+      <h3 class="reveal sub-h">{t(locale, "qs.links")}</h3>
+      <ul class="links reveal" role="list">
+        <li><a href={`${gh}/blob/main/docs/API.md`}>{t(locale, "qs.l1")}</a></li>
+        <li><a href={`${gh}/blob/main/docs/TUTORIAL.md`}>{t(locale, "qs.l2")}</a></li>
+        <li><a href={`${gh}/blob/main/docs/MODEL_POLICY.md`}>{t(locale, "qs.l3")}</a></li>
+        <li><a href={gh}>{t(locale, "qs.l4")}</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="licences" aria-labelledby="lic-title">
     <div class="container">
       <h2 id="lic-title" class="reveal">{t(locale, "lic.title")}</h2>
       <div class="two">
@@ -165,7 +146,7 @@ const gh = "https://github.com/CNalks/ailab";
               <div><dt lang={htmlLang[locale]}>{t(locale, "lic.licence")}</dt><dd><a href={s.licence_url}>{s.licence}</a></dd></div>
               <div><dt lang={htmlLang[locale]}>{t(locale, "lic.attr")}</dt><dd>{s.attribution}</dd></div>
               <div><dt lang={htmlLang[locale]}>{t(locale, "lic.notice")}</dt><dd>{s.notice}</dd></div>
-              <div><dt lang={htmlLang[locale]}>{t(locale, "lic.series")}</dt><dd>{results.filter((r) => r.res.series.source_id === s.source_id).map((r, i) => (<span>{i > 0 && " · "}<a href={`#s-${r.id}`} lang={htmlLang[locale]}>{t(locale, `s.${r.id}.n` as MessageKey)}</a></span>))}</dd></div>
+              <div><dt lang={htmlLang[locale]}>{t(locale, "lic.series")}</dt><dd lang={htmlLang[locale]}>{results.filter((r) => r.res.series.source_id === s.source_id).map((r) => t(locale, `s.${r.id}.n` as MessageKey)).join(" · ")}</dd></div>
             </dl>
           </article>
         ))}
@@ -173,6 +154,10 @@ const gh = "https://github.com/CNalks/ailab";
       <aside class="disc reveal"><h3>{t(locale, "disc.title")}</h3><p>{t(locale, "disc.body")}</p></aside>
     </div>
   </section>
+  <script is:inline define:vars={{ fc: localizePath("/forecast/", locale) }}>
+    // old in-page anchors of the walkthrough and the series cards now live on the forecast page
+    if (/^#(workflow|series|s-[\w-]+)$/.test(location.hash)) location.replace(fc);
+  </script>
 </BaseLayout>
 
 <style>
@@ -208,7 +193,6 @@ const gh = "https://github.com/CNalks/ailab";
   .step[data-step="4"] .n { background: var(--event-soft); color: var(--event-ink); }
   .step p { margin-top: var(--s-2); font-size: var(--text-sm); color: var(--ink-2); }
   .arrow { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); color: var(--muted); }
-  .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); margin-top: var(--s-6); }
   .qs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); margin-top: var(--s-5); }
   .qs h3 { margin-bottom: var(--s-2); }
   pre { margin: 0; padding: var(--s-4) var(--s-5); overflow-x: auto; border-radius: var(--radius); background: var(--bg-elev); border: 1px solid var(--line); font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--ink); }
