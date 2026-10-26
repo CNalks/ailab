@@ -43,7 +43,7 @@ jobs:
         working-directory: site
       - run: npm run build
         working-directory: site
-      - name: Decision cards repeat the static data (node --test, no extra deps)
+      - name: Walkthrough repeats the static data; i18n and size budget (node --test, no extra deps)
         run: npm test
         working-directory: site
       - name: Static output has the three languages and the data

@@ -22,13 +22,17 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 
 National or supra-national aggregates only; no sub-national or community-level data.
 
-## Decision cards (home page, right after the hero)
-Two of the series above are shown side by side as one allowed and one refused gate decision
-(`site/src/components/DecisionPair.astro`): status (text + icon), `forecast_allowed`, `reason`, `reason_codes`, a
-thumbnail drawn by the same `buildChart` code (no forecast geometry for a refusal, missing weeks stay gaps), a
-reproduce command and anchors to the full card. Every value is read from `site/public/data` at build time;
-`site/src/lib/decision.ts` fails the build if `manifest.json` and `series/<id>.json` disagree or a card's role no
-longer matches the gate, and `npm test` (after the build) checks the rendered HTML in all three languages.
+## Gate walkthrough (home page, right after the hero)
+"Pick a series, run the gate" (`site/src/components/SequenceWorkflow.astro`): the visitor picks one of the real series
+and runs it; the page then reveals, step by step, the result the engine recorded at build time — load data → data
+checks → rolling-origin backtest → decision (allowed / limited / refused, `forecast_allowed`, `reason`, `reason_codes`,
+the trilingual reason messages and the recommended action). Nothing is computed in the browser and nothing is mocked:
+the script only reveals pre-rendered steps (aria `role=status` announcements, `aria-busy`, `aria-current=step`; native
+radio + button, keyboard only works; instant under `prefers-reduced-motion`). Without JavaScript every series' full run
+is listed. `site/src/lib/workflow.ts` fails the build if `manifest.json` and `series/<id>.json` disagree, a reason code
+is unknown, the reasons do not imply the recorded decision, or a backtest ran although a data check blocked. After the
+build, `npm test` checks the rendered HTML of all three languages against the data, the dictionaries (same keys and
+placeholders, no untranslated Chinese in en / fr) and the home-page HTML budget (≤ 15,000 B over the main build).
 
 ## Refresh data
 ```bash
@@ -36,7 +40,7 @@ longer matches the gate, and `npm test` (after the build) checks the rendered HT
 # 2. recompute
 uv run python scripts/build_showcase_data.py      # -> site/public/data (fails if the size budget is exceeded)
 # 3. build
-cd site && npm ci && npm run build && npm test   # -> site/dist + decision-card checks
+cd site && npm ci && npm run build && npm test   # -> site/dist + walkthrough / i18n / size checks
 ```
 
 ## Deploy (static files only)
