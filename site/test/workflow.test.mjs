@@ -1,4 +1,4 @@
-// Post-build checks for the forecast-first walkthrough (run after `npm run build`: `npm test`).
+// Post-build checks for the "forecast this series" walkthrough (run after `npm run build`: `npm test`).
 // Every run must repeat site/public/data verbatim in all three languages; nothing is mocked.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ function section(html) {
   return m[0];
 }
 function runs(sec) {
-  return [...sec.matchAll(/<article class="run[^"]*" data-series="([^"]+)" data-decision="([^"]+)">([\s\S]*?)<\/article>/g)].map((m) => {
+  return [...sec.matchAll(/<article class="run[^"]*" data-series="([^"]+)" data-decision="([^"]+)"[^>]*>([\s\S]*?)<\/article>/g)].map((m) => {
     const steps = [...m[3].matchAll(/<li data-state="([^"]+)"><h4>([^<]*)<\/h4><b[^>]*>([^<]*)<\/b><div class="bd">([\s\S]*?)<\/div><\/li>/g)]
       .map((s) => ({ state: s[1], title: s[2], chip: s[3], body: s[4] }));
     return { id: m[1], decision: m[2], body: m[3], steps };
@@ -39,9 +39,10 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
 
   test(`${locale}: one run per real series, decisions match manifest and series/<id>.json`, () => {
     assert.deepEqual(found.map((r) => r.id).sort(), manifest.series.map((s) => s.series_id).sort());
-    const radios = [...sec.matchAll(/<input type="radio" name="wf-s" value="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(radios, found.map((r) => r.id), "one radio per run, same order");
-    assert.match(sec, /<input type="radio" name="wf-s" value="[^"]+" checked/);
+    const opts = [...sec.matchAll(/<option value="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(opts, found.map((r) => r.id), "one select option per run, same order");
+    assert.match(sec, /<select name="wf-s"[^>]*>/);
+    assert.match(sec, /<button type="button" data-wf-run>/);
     for (const r of found) {
       const s = json(`series/${r.id}.json`);
       const m = manifest.series.find((x) => x.series_id === r.id);
@@ -54,9 +55,11 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
       assert.ok(r.body.includes(`<code>reason_codes: [${s.gate.reason_codes.join(", ")}]</code>`));
       assert.deepEqual(m.gate.reason_codes, s.gate.reason_codes);
       assert.ok(r.body.includes(`href="#s-${r.id}"`) && html.includes(`id="s-${r.id}"`), "anchor to the full card");
-      assert.ok(r.body.includes('<svg class="chart'), `${r.id}: chart is primary`);
-      assert.ok(r.body.includes('class="badge"') || r.body.includes('class="badge" data-gate'), `${r.id}: decision badge`);
+      assert.ok(r.body.includes("hist-view") && r.body.includes('<svg class="chart'), `${r.id}: history chart present`);
+      assert.ok(r.body.includes('class="badge"') || r.body.includes("badge after-fc"), `${r.id}: decision badge`);
       assert.match(r.body, new RegExp(`data-gate="${r.decision}"`));
+      if (s.policy.forecast_allowed) assert.ok(r.body.includes("fc-view"), `${r.id}: forecast chart ready after click`);
+      else assert.ok(!r.body.includes("fc-view"), `${r.id}: refused has no forecast overlay chart`);
     }
     for (const d of ["allowed", "refused"]) assert.ok(found.some((r) => r.decision === d), `a ${d} run is offered`);
   });
@@ -88,12 +91,13 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     }
   });
 
-  test(`${locale}: instant select, no run button, accessible no-JS fallback`, () => {
+  test(`${locale}: forecast CTA, compact switch, accessible no-JS fallback`, () => {
     assert.match(sec, /<form class="wf-form" novalidate>/);
-    assert.match(sec, /<fieldset>[\s\S]*?<legend>[^<]+<\/legend>/);
-    assert.ok(!/<button type="submit">/.test(sec), "no mandatory run CTA");
+    assert.match(sec, /data-wf-run/);
+    assert.match(sec, /data-wf-select/);
+    assert.ok(!/<input type="radio"/.test(sec), "no radio gallery");
     assert.match(sec, /role="status" aria-live="polite"/);
-    assert.match(sec, /data-picked="/);
+    assert.match(sec, /data-done="/);
     assert.match(sec, /<noscript><p class="wf-note">[^<]+<\/p><\/noscript>/);
     assert.match(html, /<script>document\.documentElement\.classList\.add\("wf-js"\)<\/script>/, "class set before the runs render");
     assert.match(sec, /<details class="repro">/, "CLI reproduce is secondary");
@@ -101,6 +105,7 @@ for (const [locale, [file, mk]] of Object.entries(PAGES)) {
     assert.match(css, /\.wf-form\{display:none[;}]/);
     assert.match(css, /\.wf-js \.wf-form\{display:block\}/);
     assert.match(css, /\.wf-js \.wf \.run:not\(\.on\)\{display:none\}/);
+    assert.match(css, /\.wf-js \.wf \.run:not\(\.fc-on\) \.after-fc\{display:none/);
   });
 
   test(`${locale}: old decision cards are gone, evidence block renamed`, () => {

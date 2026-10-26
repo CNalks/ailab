@@ -11,10 +11,13 @@ interface Props {
   gateLabel: string;
   /** Compact walkthrough chart: fewer weeks, no signal lanes, one SVG. */
   compact?: boolean;
+  /** History only — strip forecast so the axis ends at the last observation. */
+  historyOnly?: boolean;
 }
-const { res, locale, name, gateLabel, compact = false } = Astro.props;
+const { res, locale, name, gateLabel, compact = false, historyOnly = false } = Astro.props;
 const lang = htmlLang[locale];
-const src = compact ? { ...res, alerts: [] } : res;
+let src: SeriesResult = compact ? { ...res, alerts: [] } : res;
+if (historyOnly) src = { ...src, forecast: null, policy: { ...src.policy, forecast_allowed: false } };
 const c = buildChart(src, {
   w: compact ? 640 : 720,
   h: compact ? 220 : 300,
@@ -25,7 +28,7 @@ const c = buildChart(src, {
 const alt = t(locale, "chart.alt", { name, through: res.data_through, gate: gateLabel });
 ---
 
-<svg class:list={["chart", compact && "compact"]} viewBox={`0 0 ${c.w} ${c.h}`} role="img" aria-label={alt} focusable="false">
+<svg class:list={["chart", compact && "compact", historyOnly && "hist-only"]} viewBox={`0 0 ${c.w} ${c.h}`} role="img" aria-label={alt} focusable="false">
   <title>{alt}</title>
   <g class="grid">
     {c.yTicks.map((y) => (<line x1={c.plot.l} x2={c.plot.r} y1={y.y} y2={y.y} />))}

@@ -23,15 +23,13 @@ Nothing runs live; the only runtime request is a small status badge that reads `
 National or supra-national aggregates only; no sub-national or community-level data.
 
 ## Forecast walkthrough (home page, right after the hero)
-"Pick a series, see the forecast" (`site/src/components/SequenceWorkflow.astro`): the visitor picks one of the real series
-and **immediately** sees the history chart (plus forecast bands when allowed/limited) with a one-line decision badge.
-Data checks and the rolling-origin backtest sit in a collapsed “Basis” details (not the hero). Reproduce CLI is under a
-secondary details. Nothing is computed in the browser and nothing is mocked: values are pre-rendered from
-`site/public/data`. Native radios; `role=status` announces the selection; without JavaScript every series’ chart and
-verdict are listed. `site/src/lib/workflow.ts` fails the build if `manifest.json` and `series/<id>.json` disagree, a
-reason code is unknown, the reasons do not imply the recorded decision, or a backtest ran although a data check blocked.
-After the build, `npm test` checks the rendered HTML of all three languages against the data, the dictionaries (same
-keys and placeholders, no untranslated Chinese in en / fr) and the home-page HTML budget (≤ 15,000 B over the main build).
+"Forecast this series" (`site/src/components/SequenceWorkflow.astro`): the visitor already has a real series
+(default US wILI). The history chart is shown first; the primary action is **Forecast** (policy horizon). Only after
+the click do forecast bands (when allowed/limited) and the decision badge appear. Switching series is a compact
+`<select>` (“Switch series”) and resets to history-only. “Basis” holds the four recorded steps; reproduce CLI is
+secondary. Without JavaScript every series is listed in its post-forecast state. `workflow.ts` fails the build on
+data inconsistency. `npm test` checks fidelity, i18n, and the ≤ +15 KB HTML budget vs main.
+
 
 ## Refresh data
 ```bash
